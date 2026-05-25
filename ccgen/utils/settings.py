@@ -1,0 +1,59 @@
+# settings.py — settings persistence: load, save, and merge
+
+import json
+import os
+import sys
+from typing import Any
+
+from ccgen.config.defaults import get_default_settings
+
+
+def get_settings_file() -> str:
+    """Return path to settings.json, creating the app data dir if needed."""
+    try:
+        if getattr(sys, "frozen", False):
+            appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+            data_dir = os.path.join(appdata, "CC-Gen-Ultimate")
+            os.makedirs(data_dir, exist_ok=True)
+            return os.path.join(data_dir, "settings.json")
+    except Exception:
+        pass
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(here, "settings.json")
+
+
+def load_settings() -> dict[str, Any]:
+    """Load settings from disk, merging with defaults for any missing keys."""
+    path = get_settings_file()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                user = json.load(fh)
+            return merge_settings(get_default_settings(), user)
+        except Exception:
+            pass
+    return get_default_settings()
+
+
+def save_settings(settings: dict[str, Any]) -> bool:
+    """Persist a settings dictionary to disk. Returns True on success."""
+    try:
+        with open(get_settings_file(), "w", encoding="utf-8") as fh:
+            json.dump(settings, fh, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def merge_settings(
+    defaults: dict[str, Any],
+    overrides: dict[str, Any],
+) -> dict[str, Any]:
+    """Deep-merge overrides onto defaults, preserving all nested default keys."""
+    result = defaults.copy()
+    for key, value in overrides.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = merge_settings(result[key], value)
+        else:
+            result[key] = value
+    return result

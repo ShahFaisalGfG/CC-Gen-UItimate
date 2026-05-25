@@ -1,0 +1,7 @@
+{
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "standard",
+  "include": ["ccgen", "main.py", "tests"]
+}

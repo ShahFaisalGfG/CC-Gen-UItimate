@@ -1,0 +1,48 @@
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+
+# ── Build & distribution ──────────────────────────────────────────────────────
+build/
+dist/
+dist_portable/
+*.spec
+
+# ── Native C++ build ──────────────────────────────────────────────────────────
+native/out/
+native/build/
+native/vcpkg_installed/
+*.pyd
+
+# ── vcpkg ─────────────────────────────────────────────────────────────────────
+.vcpkg/
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.egg-info/
+*.dist-info/
+
+# ── Runtime output ────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.claude/
+.pytest_cache/
+CLAUDE.md
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+trash/
+*.exe
+*.bkp
+*.pdf
+
+# release*.md
+optimization*.md
+benchmark*.md
+context*.md
+winget-publish.md
+release.sh

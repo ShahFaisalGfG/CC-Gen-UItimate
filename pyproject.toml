@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ccgen"
+version = "1.0.0"
+description = "Offline video/audio transcription and subtitle generation"
+authors = [{ name = "Shah Faisal", email = "shahfaisalgfg@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "faster-whisper>=1.0.3",
+    "argostranslate>=1.9.6",
+    "ffmpeg-python>=0.2.0",
+]
+
+[project.scripts]
+ccgen = "main:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyright>=1.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+include = ["ccgen", "main.py", "tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ccgen*"]
