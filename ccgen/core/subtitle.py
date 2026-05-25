@@ -4,9 +4,9 @@ import os
 from typing import Union
 
 from ccgen.config.defaults import OutputDefaults
-from ccgen.core import Segment, TranslatedSegment
+from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
 
-SubtitleSource = Union[list[Segment], list[TranslatedSegment]]
+SubtitleSource = Union[list[Segment], list[TranslatedSegment], list[TransliteratedSegment]]
 
 
 def write_srt(
@@ -59,7 +59,7 @@ def derive_output_path(input_path: str, suffix: str, ext: str) -> str:
 def _build_srt(segments: SubtitleSource, translated: bool) -> list[str]:
     """Return SRT-formatted text lines for all segments."""
     lines: list[str] = []
-    for seg in segments:
+    for seg in segments:  # type: ignore[union-attr]
         lines.append(str(seg["id"] + 1))
         lines.append(f"{_srt_time(seg['start'])} --> {_srt_time(seg['end'])}")
         lines.extend(_wrap_text(_get_text(seg, translated)))
@@ -70,18 +70,20 @@ def _build_srt(segments: SubtitleSource, translated: bool) -> list[str]:
 def _build_vtt_cues(segments: SubtitleSource, translated: bool) -> list[str]:
     """Return VTT cue lines for all segments."""
     lines: list[str] = []
-    for seg in segments:
+    for seg in segments:  # type: ignore[union-attr]
         lines.append(f"{_vtt_time(seg['start'])} --> {_vtt_time(seg['end'])}")
         lines.extend(_wrap_text(_get_text(seg, translated)))
         lines.append("")
     return lines
 
 
-def _get_text(seg: Union[Segment, TranslatedSegment], translated: bool) -> str:
-    """Extract the appropriate text field from a segment dict."""
+def _get_text(seg: Union[Segment, TranslatedSegment, TransliteratedSegment], translated: bool) -> str:
+    """Extract the appropriate text field from any segment dict."""
+    if "transliterated" in seg:
+        return seg["transliterated"].strip()  # type: ignore[typeddict-item]
     if translated and "translated" in seg:
         return seg["translated"].strip()  # type: ignore[typeddict-item]
-    return seg["text"].strip()  # type: ignore[typeddict-item]
+    return seg.get("text", "").strip()  # type: ignore[union-attr]
 
 
 def _wrap_text(text: str) -> list[str]:

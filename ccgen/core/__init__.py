@@ -33,4 +33,16 @@ class TranslatedSegment(TypedDict):
     language: str
 
 
-__all__ = ["WordToken", "Segment", "TranslatedSegment"]
+class TransliteratedSegment(TypedDict):
+    """A phonetically converted segment preserving original timing."""
+
+    id: int
+    start: float
+    end: float
+    original: str
+    transliterated: str
+    source_scheme: str
+    target_scheme: str
+
+
+__all__ = ["WordToken", "Segment", "TranslatedSegment", "TransliteratedSegment"]

@@ -1,5 +1,6 @@
 # translator.py — argostranslate wrapper with offline model management
 
+import logging
 from typing import Callable, Optional
 
 import argostranslate.package
@@ -7,6 +8,8 @@ import argostranslate.translate
 
 from ccgen.config.defaults import TranslationDefaults
 from ccgen.core import Segment, TranslatedSegment
+
+_log = logging.getLogger(__name__)
 
 
 class Translator:
@@ -27,16 +30,20 @@ class Translator:
         Raises RuntimeError when the pair is unsupported or download fails.
         """
         try:
+            _log.debug("ensure_model: %s→%s", self._source_lang, self._target_lang)
             if self._is_installed():
                 self._engine = self._get_engine()
+                _log.debug("Translation model already installed")
                 return
             _cb(progress_cb, f"Downloading translation model {self._source_lang}→{self._target_lang}...")
             self._download_and_install()
             self._engine = self._get_engine()
             _cb(progress_cb, "Translation model ready.")
+            _log.info("Translation model ready: %s→%s", self._source_lang, self._target_lang)
         except RuntimeError:
             raise
         except Exception as e:
+            _log.error("Model setup failed (%s→%s): %r", self._source_lang, self._target_lang, e, exc_info=True)
             raise RuntimeError(
                 f"Model setup failed ({self._source_lang}→{self._target_lang}): {e}"
             ) from e
@@ -53,10 +60,14 @@ class Translator:
         try:
             if self._engine is None:
                 raise RuntimeError("Call ensure_model() before translate_segments().")
-            return [self._translate_one(seg, progress_cb) for seg in segments]
+            _log.info("Translating %d segments (%s→%s)", len(segments), self._source_lang, self._target_lang)
+            results = [self._translate_one(seg, progress_cb) for seg in segments]
+            _log.info("Translation complete: %d segments", len(results))
+            return results
         except RuntimeError:
             raise
         except Exception as e:
+            _log.error("Translation failed: %r", e, exc_info=True)
             raise RuntimeError(f"Translation failed: {e}") from e
 
     def set_pair(self, source: str, target: str) -> None:
@@ -87,6 +98,7 @@ class Translator:
     def _download_and_install(self) -> None:
         """Fetch the package index and install the required language pair."""
         try:
+            _log.info("Downloading package index for %s→%s", self._source_lang, self._target_lang)
             argostranslate.package.update_package_index()
             available = argostranslate.package.get_available_packages()
             pkg = next(
@@ -100,10 +112,12 @@ class Translator:
                 raise RuntimeError(
                     f"No translation package for {self._source_lang}→{self._target_lang}."
                 )
+            _log.info("Installing package: %s→%s", self._source_lang, self._target_lang)
             argostranslate.package.install_from_path(pkg.download())
         except RuntimeError:
             raise
         except Exception as e:
+            _log.error("Package download failed: %r", e, exc_info=True)
             raise RuntimeError(f"Package download failed: {e}") from e
 
     def _get_engine(self) -> argostranslate.translate.ITranslation:

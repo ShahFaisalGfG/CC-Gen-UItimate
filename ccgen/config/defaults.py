@@ -79,6 +79,76 @@ class LoggingDefaults:
     SUPPORTED_LOG_LEVELS = ["critical", "all"]
 
 
+class UIDefaults:
+    """Main window and panel size defaults."""
+
+    WINDOW_WIDTH = 820
+    WINDOW_HEIGHT = 560
+    MIN_WIDTH = 680
+    MIN_HEIGHT = 460
+    LEFT_PANEL_WIDTH = 240
+
+
+class LanguageOptions:
+    """Language lists for transcription and translation UI dropdowns."""
+
+    TRANSCRIPTION: list[tuple[str, str | None]] = [
+        ("Auto-detect", None),
+        ("Arabic", "ar"),
+        ("Chinese", "zh"),
+        ("English", "en"),
+        ("French", "fr"),
+        ("German", "de"),
+        ("Hindi", "hi"),
+        ("Japanese", "ja"),
+        ("Korean", "ko"),
+        ("Portuguese", "pt"),
+        ("Russian", "ru"),
+        ("Spanish", "es"),
+        ("Turkish", "tr"),
+        ("Urdu", "ur"),
+    ]
+
+    TRANSLATION_TARGETS: list[tuple[str, str]] = [
+        ("Arabic", "ar"),
+        ("English", "en"),
+        ("French", "fr"),
+        ("German", "de"),
+        ("Hindi", "hi"),
+        ("Portuguese", "pt"),
+        ("Russian", "ru"),
+        ("Spanish", "es"),
+        ("Turkish", "tr"),
+        ("Urdu", "ur"),
+    ]
+
+
+class TransliterationDefaults:
+    """indic-transliteration scheme defaults."""
+
+    DEFAULT_SOURCE = "roman"
+    DEFAULT_TARGET = "ur"
+    ENABLED = False
+    INPUT_SOURCE = "transcription"
+
+    SCHEMES: list[tuple[str, str]] = [
+        ("Roman / Latin",      "roman"),
+        ("Urdu (Nastaliq)",    "ur"),
+        ("Hindi (Devanagari)", "hi"),
+        ("Bengali",            "bn"),
+        ("Gujarati",           "gu"),
+        ("Punjabi (Gurmukhi)", "pa"),
+        ("Tamil",              "ta"),
+        ("Telugu",             "te"),
+        ("Kannada",            "kn"),
+        ("Malayalam",          "ml"),
+        ("Odia",               "or"),
+        ("Sinhala",            "si"),
+        ("Thai",               "th"),
+        ("Burmese",            "my"),
+    ]
+
+
 def get_default_settings() -> dict[str, Any]:
     """Return the complete default settings dictionary."""
     return {
@@ -107,5 +177,14 @@ def get_default_settings() -> dict[str, Any]:
         "logging": {
             "enable_logs": LoggingDefaults.ENABLE_LOGS,
             "log_level": LoggingDefaults.DEFAULT_LOG_LEVEL,
+        },
+        "transliteration": {
+            "enabled": TransliterationDefaults.ENABLED,
+            "source": TransliterationDefaults.DEFAULT_SOURCE,
+            "target": TransliterationDefaults.DEFAULT_TARGET,
+            "input_source": TransliterationDefaults.INPUT_SOURCE,
+        },
+        "ui": {
+            "theme": "system",
         },
     }

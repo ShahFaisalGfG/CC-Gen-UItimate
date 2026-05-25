@@ -46,3 +46,26 @@ def safe_stem(path: str) -> str:
         return os.path.splitext(os.path.basename(path))[0]
     except Exception:
         return path
+
+
+def format_bytes(num_bytes: float) -> str:
+    """Format a byte count into a human-readable string (e.g. '45.2 MB')."""
+    try:
+        for unit in ("B", "KB", "MB", "GB"):
+            if abs(num_bytes) < 1024.0:
+                return f"{num_bytes:.1f} {unit}"
+            num_bytes /= 1024.0
+        return f"{num_bytes:.1f} TB"
+    except Exception:
+        return "0 B"
+
+
+def format_duration_ms(seconds: float) -> str:
+    """Format float seconds into HH:MM:SS for subtitle segment timestamps."""
+    try:
+        total = int(seconds)
+        hrs, remainder = divmod(total, 3600)
+        mins, secs = divmod(remainder, 60)
+        return f"{hrs:02d}:{mins:02d}:{secs:02d}"
+    except Exception:
+        return "00:00:00"

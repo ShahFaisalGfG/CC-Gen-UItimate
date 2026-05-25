@@ -41,8 +41,10 @@ trash/
 *.pdf
 
 # release*.md
+SRS.md
 optimization*.md
 benchmark*.md
 context*.md
 winget-publish.md
 release.sh
+test_news_en.mp4

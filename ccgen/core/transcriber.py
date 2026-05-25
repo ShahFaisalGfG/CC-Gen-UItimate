@@ -1,5 +1,6 @@
 # transcriber.py — faster-whisper wrapper producing word-timestamped segments
 
+import logging
 import os
 from typing import Callable, Iterator, Optional
 
@@ -7,6 +8,8 @@ from faster_whisper import WhisperModel
 
 from ccgen.config.defaults import ComputeDefaults, ModelDefaults, TranscriptionDefaults
 from ccgen.core import Segment, WordToken
+
+_log = logging.getLogger(__name__)
 
 
 class Transcriber:
@@ -26,6 +29,7 @@ class Transcriber:
     def load(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
         """Load (and download if needed) the Whisper model into memory."""
         try:
+            _log.info("Loading Whisper model '%s' on %s/%s", self._model_name, self._device, self._compute_type)
             _cb(progress_cb, f"Loading model '{self._model_name}'...")
             self._model = WhisperModel(
                 self._model_name,
@@ -33,7 +37,9 @@ class Transcriber:
                 compute_type=self._compute_type,
             )
             _cb(progress_cb, "Model ready.")
+            _log.info("Whisper model ready: %s", self._model_name)
         except Exception as e:
+            _log.error("Model load failed (%s): %r", self._model_name, e, exc_info=True)
             raise RuntimeError(f"Model load failed ({self._model_name}): {e}") from e
 
     def transcribe(
@@ -43,6 +49,7 @@ class Transcriber:
         beam_size: int = TranscriptionDefaults.BEAM_SIZE,
         vad_filter: bool = TranscriptionDefaults.VAD_FILTER,
         progress_cb: Optional[Callable[[str], None]] = None,
+        segment_cb: Optional[Callable[["Segment"], None]] = None,
     ) -> list[Segment]:
         """Transcribe an audio file and return a list of word-timestamped segments.
 
@@ -53,10 +60,16 @@ class Transcriber:
                 raise RuntimeError("Call load() before transcribe().")
             if not os.path.isfile(audio_path):
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            return list(self._iter_segments(audio_path, language, beam_size, vad_filter, progress_cb))
+            _log.info("Transcribing: %s (lang=%s, beam=%d, vad=%s)", os.path.basename(audio_path), language, beam_size, vad_filter)
+            segments = list(
+                self._iter_segments(audio_path, language, beam_size, vad_filter, progress_cb, segment_cb)
+            )
+            _log.info("Transcription complete: %d segments", len(segments))
+            return segments
         except (RuntimeError, FileNotFoundError):
             raise
         except Exception as e:
+            _log.error("Transcription failed: %r", e, exc_info=True)
             raise RuntimeError(f"Transcription failed: {e}") from e
 
     def is_loaded(self) -> bool:
@@ -77,8 +90,9 @@ class Transcriber:
         beam_size: int,
         vad_filter: bool,
         progress_cb: Optional[Callable[[str], None]],
+        segment_cb: Optional[Callable[["Segment"], None]] = None,
     ) -> Iterator[Segment]:
-        """Iterate faster-whisper output and yield typed Segment dicts."""
+        """Iterate faster-whisper output, yield typed Segment dicts, and fire segment_cb per segment."""
         vad_params = {"min_silence_duration_ms": TranscriptionDefaults.VAD_MIN_SILENCE_MS}
         segments, info = self._model.transcribe(  # type: ignore[union-attr]
             audio_path,
@@ -97,7 +111,7 @@ class Transcriber:
                     WordToken(word=w.word, start=w.start, end=w.end)
                     for w in seg.words
                 ]
-            yield Segment(
+            built = Segment(
                 id=idx,
                 start=seg.start,
                 end=seg.end,
@@ -105,6 +119,12 @@ class Transcriber:
                 words=words,
                 language=detected,
             )
+            if segment_cb:
+                try:
+                    segment_cb(built)
+                except Exception:
+                    pass
+            yield built
 
 
 def _cb(fn: Optional[Callable[[str], None]], msg: str) -> None:

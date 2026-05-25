@@ -1,0 +1,37 @@
+{
+  "model": {
+    "name": "base",
+    "device": "cpu",
+    "compute_type": "int8"
+  },
+  "transcription": {
+    "language": null,
+    "word_timestamps": true,
+    "beam_size": 5,
+    "vad_filter": true
+  },
+  "translation": {
+    "enabled": false,
+    "source_lang": "auto",
+    "target_lang": "en"
+  },
+  "output": {
+    "srt": true,
+    "vtt": false,
+    "max_line_length": 42,
+    "max_lines": 2
+  },
+  "logging": {
+    "enable_logs": true,
+    "log_level": "critical"
+  },
+  "transliteration": {
+    "enabled": false,
+    "source": "roman",
+    "target": "ur",
+    "input_source": "transcription"
+  },
+  "ui": {
+    "theme": "light"
+  }
+}
