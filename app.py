@@ -12,6 +12,7 @@ from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 
+from ccgen.api.embedded import EmbeddedServer
 from ccgen.controllers.app_ctrl import AppController
 from ccgen.controllers.prefs_ctrl import PrefsController
 from ccgen.controllers.transcription_ctrl import TranscriptionController
@@ -39,6 +40,13 @@ def main() -> None:
 
     app = QApplication(sys.argv)
 
+    api_server = EmbeddedServer()
+    api_server.start()
+    if not api_server.wait_ready():
+        _log.critical("Embedded API server failed to start")
+        sys.exit(-1)
+    _log.info("Embedded API server ready at %s", api_server.base_url)
+
     icon = QIcon()
     for _sz in [16, 32, 48, 256]:
         _p = resource_path(f"ccgen/assets/icons/Square44x44Logo.targetsize-{_sz}.png")
@@ -48,8 +56,8 @@ def main() -> None:
         app.setWindowIcon(icon)
 
     app_ctrl   = AppController()
-    trans_ctrl = TranscriptionController()
-    prefs_ctrl = PrefsController()
+    trans_ctrl = TranscriptionController(api_server.base_url)
+    prefs_ctrl = PrefsController(api_server.base_url)
     _log.debug("Controllers ready")
 
     engine = QQmlApplicationEngine()
@@ -77,6 +85,7 @@ def main() -> None:
         _log.info("Window created (non-QQuickWindow root)")
     code = app.exec()
     del engine          # destroy QML scene before Python controllers are GC'd
+    api_server.stop()
     sys.exit(code)
 
 

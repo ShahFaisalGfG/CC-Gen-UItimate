@@ -37,8 +37,8 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: Material.theme === Material.Dark ? "#1e1e1e" : "#f3f3f3"
-        border.color: Material.theme === Material.Dark ? "#3c3c3c" : "#c8c8c8"
+        color: appController.colorBackground
+        border.color: appController.colorDivider
         border.width: 1
     }
 
@@ -56,11 +56,12 @@ ApplicationWindow {
             id: tabBar
             Layout.fillWidth:       true
             Layout.preferredHeight: 44
-            Material.accent: "#0078d4"
 
-            TabButton { text: "Appearance";    font.pixelSize: 12; implicitHeight: 44 }
-            TabButton { text: "Transcription"; font.pixelSize: 12; implicitHeight: 44 }
-            TabButton { text: "Advanced";      font.pixelSize: 12; implicitHeight: 44 }
+            TabButton { text: "Appearance";      font.pixelSize: 12; implicitHeight: 44 }
+            TabButton { text: "Transcription";   font.pixelSize: 12; implicitHeight: 44 }
+            TabButton { text: "Translation";     font.pixelSize: 12; implicitHeight: 44 }
+            TabButton { text: "Transliteration"; font.pixelSize: 12; implicitHeight: 44 }
+            TabButton { text: "Advanced";        font.pixelSize: 12; implicitHeight: 44 }
         }
 
         StackLayout {
@@ -109,7 +110,7 @@ ApplicationWindow {
                                 text: "System follows your Windows light/dark setting."
                                 font.pixelSize: 11
                                 wrapMode: Text.WordWrap
-                                color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                                color: appController.colorTextSecondary
                                 Layout.fillWidth: true
                             }
                         }
@@ -191,6 +192,190 @@ ApplicationWindow {
                 }
             }
 
+            // ── Translation tab ────────────────────────────────────────────
+            Flickable {
+                contentHeight: translationCol.implicitHeight
+                clip: true
+
+                ColumnLayout {
+                    id: translationCol
+                    anchors.left:    parent.left
+                    anchors.right:   parent.right
+                    anchors.margins: 20
+                    spacing: 16
+
+                    Item { implicitHeight: 8 }
+
+                    GroupBox {
+                        Layout.fillWidth: true
+                        title: "Defaults"
+                        font.pixelSize: 12
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    text: "Translate by default"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                Switch {
+                                    id: translateEnabledSwitch
+                                    onCheckedChanged: prefsWin._dirty = true
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: translateEnabledSwitch.checked
+                                Text {
+                                    text: "Target language"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    id:                     translateTargetCombo
+                                    font.pixelSize:         12
+                                    Layout.preferredWidth:  160
+                                    Layout.preferredHeight: 34
+                                    model: prefsController.targetOptions.map(o => o.label)
+                                    onCurrentIndexChanged: prefsWin._dirty = true
+                                }
+                            }
+                        }
+                    }
+
+                    Item { implicitHeight: 4 }
+                }
+            }
+
+            // ── Transliteration tab ────────────────────────────────────────
+            Flickable {
+                contentHeight: translitCol.implicitHeight
+                clip: true
+
+                ColumnLayout {
+                    id: translitCol
+                    anchors.left:    parent.left
+                    anchors.right:   parent.right
+                    anchors.margins: 20
+                    spacing: 16
+
+                    Item { implicitHeight: 8 }
+
+                    GroupBox {
+                        Layout.fillWidth: true
+                        title: "Defaults"
+                        font.pixelSize: 12
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    text: "Transliterate by default"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                Switch {
+                                    id: translitEnabledSwitch
+                                    onCheckedChanged: prefsWin._dirty = true
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: translitEnabledSwitch.checked
+                                spacing: 6
+                                Text {
+                                    text: "Scheme"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    id: translitSourceCombo
+                                    font.pixelSize:         11
+                                    Layout.preferredWidth:  110
+                                    Layout.preferredHeight: 34
+                                    model: prefsController.translitSchemeOptions.map(o => o.label)
+                                    onCurrentIndexChanged: prefsWin._dirty = true
+                                }
+                                Text {
+                                    text: "→"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                }
+                                StyledComboBox {
+                                    id: translitTargetCombo
+                                    font.pixelSize:         11
+                                    Layout.preferredWidth:  110
+                                    Layout.preferredHeight: 34
+                                    model: prefsController.translitSchemeOptions.map(o => o.label)
+                                    onCurrentIndexChanged: prefsWin._dirty = true
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: translitEnabledSwitch.checked
+                                Text {
+                                    text: "Transliterate from"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    id:                     translitInputCombo
+                                    font.pixelSize:         12
+                                    Layout.preferredWidth:  160
+                                    Layout.preferredHeight: 34
+                                    model: ["Transcription", "Translation"]
+                                    onCurrentIndexChanged: prefsWin._dirty = true
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: translitEnabledSwitch.checked
+                                Text {
+                                    text: "Engine"
+                                    font.pixelSize: 12
+                                    color: Material.foreground
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    id:                     translitEngineCombo
+                                    font.pixelSize:         12
+                                    Layout.preferredWidth:  160
+                                    Layout.preferredHeight: 34
+                                    model: prefsController.translitEngineOptions.map(o => o.label)
+                                    onCurrentIndexChanged: prefsWin._dirty = true
+                                }
+                            }
+
+                            Text {
+                                text: "Neural gives more natural results but downloads a larger model on first use."
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                color: appController.colorTextSecondary
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+
+                    Item { implicitHeight: 4 }
+                }
+            }
+
             // ── Advanced tab ──────────────────────────────────────────────
             Flickable {
                 contentHeight: advCol.implicitHeight
@@ -245,7 +430,7 @@ ApplicationWindow {
                                 text: "Clear Logs"
                                 flat: true
                                 font.pixelSize: 11
-                                Material.foreground: "#e0004f"
+                                Material.foreground: appController.colorDanger
                                 onClicked: appController.clearLogs()
                             }
                         }
@@ -259,7 +444,7 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1
-            color: Material.theme === Material.Dark ? "#3c3c3c" : "#e0e0e0"
+            color: appController.colorDivider
         }
 
         RowLayout {
@@ -272,12 +457,8 @@ ApplicationWindow {
                 flat: true
                 font.pixelSize: 12
                 Layout.preferredHeight: 40
-                Material.foreground: "#e0004f"
-                onClicked: {
-                    prefsController.resetDefaults()
-                    prefsWin.loadValues()
-                    prefsWin._dirty = false
-                }
+                Material.foreground: appController.colorDanger
+                onClicked: prefsController.resetDefaults()
             }
             Item { Layout.fillWidth: true }
             Button {
@@ -305,10 +486,30 @@ ApplicationWindow {
             modelCombo.currentIndex = defaultIdx >= 0 ? defaultIdx : 0
             enableLogsCheck.checked = prefsController.enableLogs
             logLevelCombo.currentIndex = prefsController.logLevel === "all" ? 1 : 0
-            srtCheck.checked = true
-            vttCheck.checked = false
+            srtCheck.checked = prefsController.defaultEmitSrt
+            vttCheck.checked = prefsController.defaultEmitVtt
+
+            translateEnabledSwitch.checked = prefsController.defaultTranslateEnabled
+            translateTargetCombo.currentIndex = indexByCode(
+                prefsController.targetOptions, prefsController.defaultTranslateTarget, 0)
+
+            translitEnabledSwitch.checked = prefsController.defaultTransliterateEnabled
+            translitSourceCombo.currentIndex = indexByCode(
+                prefsController.translitSchemeOptions, prefsController.defaultTranslitSource, 0)
+            translitTargetCombo.currentIndex = indexByCode(
+                prefsController.translitSchemeOptions, prefsController.defaultTranslitTarget, 1)
+            translitInputCombo.currentIndex = prefsController.defaultTranslitInput === "translation" ? 1 : 0
+            translitEngineCombo.currentIndex = indexByCode(
+                prefsController.translitEngineOptions, prefsController.defaultTranslitEngine, 0)
+
             prefsWin._dirty = false
         } catch(e) {}
+    }
+
+    function indexByCode(options, code, fallback) {
+        for (var i = 0; i < options.length; i++)
+            if (options[i].code === code) return i
+        return fallback
     }
 
     function applyValues() {
@@ -319,6 +520,28 @@ ApplicationWindow {
             prefsController.setSetting("model.name", prefsController.modelOptions[modelCombo.currentIndex])
             prefsController.setSetting("logging.enable_logs", enableLogsCheck.checked)
             prefsController.setSetting("logging.log_level", logLevelCombo.currentIndex === 1 ? "all" : "critical")
+            prefsController.setSetting("output.srt", srtCheck.checked)
+            prefsController.setSetting("output.vtt", vttCheck.checked)
+
+            prefsController.setSetting("translation.enabled", translateEnabledSwitch.checked)
+            prefsController.setSetting(
+                "translation.target_lang",
+                prefsController.targetOptions[translateTargetCombo.currentIndex].code)
+
+            prefsController.setSetting("transliteration.enabled", translitEnabledSwitch.checked)
+            prefsController.setSetting(
+                "transliteration.source",
+                prefsController.translitSchemeOptions[translitSourceCombo.currentIndex].code)
+            prefsController.setSetting(
+                "transliteration.target",
+                prefsController.translitSchemeOptions[translitTargetCombo.currentIndex].code)
+            prefsController.setSetting(
+                "transliteration.input_source",
+                translitInputCombo.currentIndex === 1 ? "translation" : "transcription")
+            prefsController.setSetting(
+                "transliteration.engine",
+                prefsController.translitEngineOptions[translitEngineCombo.currentIndex].code)
+
             appController.applyTheme(chosenTheme)
             prefsWin._dirty = false
         } catch(e) {}

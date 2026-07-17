@@ -1,45 +1,60 @@
-# prefs_ctrl.py — preferences controller
+# prefs_ctrl.py — preferences controller (HTTP client of the embedded API)
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+import json
+from typing import Any
+
+from PySide6.QtCore import Property, QByteArray, QObject, QUrl, Signal, Slot
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
 from ccgen.config.defaults import (
     LanguageOptions,
     LoggingDefaults,
     ModelDefaults,
     TransliterationDefaults,
+    get_default_settings,
 )
-from ccgen.utils.settings import get_default_settings, load_settings, save_settings
 
 
 class PrefsController(QObject):
-    """Exposes application preferences to QML with live change notifications."""
+    """Exposes application preferences to QML, backed by the embedded API's /settings route."""
 
     settingsChanged = Signal()
     themeChanged    = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, base_url: str, parent=None):
         super().__init__(parent)
-        self._settings = load_settings()
+        self._base_url = base_url
+        self._net = QNetworkAccessManager(self)
+        self._settings: dict[str, Any] = get_default_settings()
+        self._fetch_settings()
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
     def _get(self, *keys: str, default=None):
         """Navigate nested settings keys and return the value or default."""
         try:
-            val = self._settings
+            val: Any = self._settings
             for k in keys:
                 val = val[k]
             return val
         except Exception:
             return default
 
-    def _set(self, value, *keys: str) -> None:
-        """Set a nested settings value without saving to disk."""
+    def _fetch_settings(self) -> None:
+        """Asynchronously fetch the current settings from the embedded API."""
+        request = QNetworkRequest(QUrl(f"{self._base_url}/settings"))
+        reply = self._net.get(request)
+        reply.finished.connect(lambda: self._on_settings_fetched(reply))
+
+    def _on_settings_fetched(self, reply: QNetworkReply) -> None:
+        """Apply the fetched settings dictionary and notify QML."""
         try:
-            node = self._settings
-            for k in keys[:-1]:
-                node = node.setdefault(k, {})
-            node[keys[-1]] = value
+            reply.deleteLater()
+            if reply.error() != QNetworkReply.NetworkError.NoError:
+                return
+            self._settings = json.loads(bytes(reply.readAll().data()).decode("utf-8"))
+            self.settingsChanged.emit()
+            self.themeChanged.emit(str(self._get("ui", "theme", default="system")))
         except Exception:
             pass
 
@@ -79,6 +94,14 @@ class PrefsController(QObject):
             for label, code in TransliterationDefaults.SCHEMES
         ]
 
+    @Property(list, constant=True)
+    def translitEngineOptions(self) -> list:
+        """Transliteration engine options as list of {label, code} dicts."""
+        return [
+            {"label": label, "code": code}
+            for label, code in TransliterationDefaults.ENGINES
+        ]
+
     # ── Persisted settings properties ────────────────────────────────────────
 
     @Property(str, notify=themeChanged)
@@ -97,24 +120,67 @@ class PrefsController(QObject):
     def logLevel(self) -> str:
         return str(self._get("logging", "log_level", default=LoggingDefaults.DEFAULT_LOG_LEVEL))
 
-    # ── Slots ────────────────────────────────────────────────────────────────
+    @Property(bool, notify=settingsChanged)
+    def defaultEmitSrt(self) -> bool:
+        return bool(self._get("output", "srt", default=True))
+
+    @Property(bool, notify=settingsChanged)
+    def defaultEmitVtt(self) -> bool:
+        return bool(self._get("output", "vtt", default=False))
+
+    @Property(bool, notify=settingsChanged)
+    def defaultTranslateEnabled(self) -> bool:
+        return bool(self._get("translation", "enabled", default=False))
+
+    @Property(str, notify=settingsChanged)
+    def defaultTranslateTarget(self) -> str:
+        return str(self._get("translation", "target_lang", default="en"))
+
+    @Property(bool, notify=settingsChanged)
+    def defaultTransliterateEnabled(self) -> bool:
+        return bool(self._get("transliteration", "enabled", default=False))
+
+    @Property(str, notify=settingsChanged)
+    def defaultTranslitSource(self) -> str:
+        return str(self._get("transliteration", "source", default="roman"))
+
+    @Property(str, notify=settingsChanged)
+    def defaultTranslitTarget(self) -> str:
+        return str(self._get("transliteration", "target", default="ur"))
+
+    @Property(str, notify=settingsChanged)
+    def defaultTranslitInput(self) -> str:
+        return str(self._get("transliteration", "input_source", default="transcription"))
+
+    @Property(str, notify=settingsChanged)
+    def defaultTranslitEngine(self) -> str:
+        return str(self._get("transliteration", "engine", default="rule"))
+
+    # ── Slots ─────────────────────────────────────────────────────────────────
 
     @Slot()
     def loadSettings(self) -> None:
-        """Reload settings from disk and notify QML."""
+        """Re-fetch settings from the embedded API and notify QML."""
+        self._fetch_settings()
+
+    @Slot(str, "QVariant")
+    def setSetting(self, key: str, value: Any) -> None:
+        """PUT a dot-separated key/value update to the embedded API."""
         try:
-            self._settings = load_settings()
-            self.settingsChanged.emit()
+            body = QByteArray(json.dumps({"key": key, "value": value}).encode("utf-8"))
+            request = QNetworkRequest(QUrl(f"{self._base_url}/settings"))
+            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
+            reply = self._net.put(request, body)
+            reply.finished.connect(lambda: self._on_setting_saved(reply, key, value))
         except Exception:
             pass
 
-    @Slot(str, "QVariant")
-    def setSetting(self, key: str, value) -> None:
-        """Set a dot-separated key and persist immediately."""
+    def _on_setting_saved(self, reply: QNetworkReply, key: str, value: Any) -> None:
+        """Apply the server's updated settings snapshot and notify QML."""
         try:
-            keys = key.split(".")
-            self._set(value, *keys)
-            save_settings(self._settings)
+            reply.deleteLater()
+            if reply.error() == QNetworkReply.NetworkError.NoError:
+                self._settings = json.loads(bytes(reply.readAll().data()).decode("utf-8"))
             self.settingsChanged.emit()
             if key in ("ui.theme", "theme"):
                 self.themeChanged.emit(str(value))
@@ -123,11 +189,10 @@ class PrefsController(QObject):
 
     @Slot()
     def resetDefaults(self) -> None:
-        """Reset all settings to factory defaults and persist."""
+        """Reset all settings to factory defaults via the embedded API."""
         try:
-            self._settings = get_default_settings()
-            save_settings(self._settings)
-            self.settingsChanged.emit()
-            self.themeChanged.emit(self._settings.get("ui", {}).get("theme", "system"))
+            request = QNetworkRequest(QUrl(f"{self._base_url}/settings/reset"))
+            reply = self._net.post(request, QByteArray())
+            reply.finished.connect(lambda: self._on_settings_fetched(reply))
         except Exception:
             pass

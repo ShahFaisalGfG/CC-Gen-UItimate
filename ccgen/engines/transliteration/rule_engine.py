@@ -1,47 +1,48 @@
-# transliterator.py — phonetic script conversion using indic-transliteration
+# rule_engine.py — fast, fully offline transliteration: indic-transliteration for genuine
+# Indic-script pairs, a dedicated converter for Urdu <-> Roman Urdu, and diacritic cleanup
+# for Hindi/Punjabi -> Urdu output (see urdu_roman_map.py for why the built-in scheme isn't used)
 
 import logging
+import re
 from typing import Callable, Optional, Union
 
 from indic_transliteration import sanscript
 
 from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
+from ccgen.engines.transliteration.base import TransliterationEngine
+from ccgen.engines.transliteration.urdu_roman_map import roman_to_urdu, urdu_to_roman
 
 _log = logging.getLogger(__name__)
 
-_SCHEME_MAP: dict[str, str] = {
-    "roman": sanscript.IAST,
-    "ur":    "urdu",
-    "hi":    sanscript.DEVANAGARI,
-    "bn":    sanscript.BENGALI,
-    "gu":    sanscript.GUJARATI,
-    "pa":    sanscript.GURMUKHI,
-    "ta":    sanscript.TAMIL,
-    "te":    sanscript.TELUGU,
-    "kn":    sanscript.KANNADA,
-    "ml":    sanscript.MALAYALAM,
-    "or":    sanscript.ORIYA,
-    "si":    "sinhala",
-    "th":    "thai",
-    "my":    "burmese",
+_URDU_KEY = "ur"
+_ROMAN_KEY = "roman"
+_DIACRITICS_RE = re.compile("[ً-ْ]")
+
+_INDIC_SCHEME_MAP: dict[str, str] = {
+    "hi": sanscript.DEVANAGARI,
+    "bn": sanscript.BENGALI,
+    "gu": sanscript.GUJARATI,
+    "pa": sanscript.GURMUKHI,
+    "ta": sanscript.TAMIL,
+    "te": sanscript.TELUGU,
+    "kn": sanscript.KANNADA,
+    "ml": sanscript.MALAYALAM,
+    "or": sanscript.ORIYA,
+    "si": "sinhala",
+    "th": "thai",
+    "my": "burmese",
 }
 
 
-class Transliterator:
-    """Converts text phonetically between writing scripts, preserving segment timing."""
-
-    SCHEME_MAP: dict[str, str] = _SCHEME_MAP
+class RuleEngine(TransliterationEngine):
+    """Fast, fully offline transliteration using character rules and script tables."""
 
     def __init__(self, source_scheme: str, target_scheme: str) -> None:
-        self._source = self._resolve(source_scheme)
-        self._target = self._resolve(target_scheme)
         self._source_key = source_scheme
         self._target_key = target_scheme
 
     def set_schemes(self, source: str, target: str) -> None:
         """Update source and target scheme codes."""
-        self._source = self._resolve(source)
-        self._target = self._resolve(target)
         self._source_key = source
         self._target_key = target
 
@@ -53,12 +54,10 @@ class Transliterator:
         """Transliterate a segment list between scripts, preserving timing."""
         try:
             _log.info(
-                "Transliterating %d segments: %s → %s",
+                "Rule engine transliterating %d segments: %s → %s",
                 len(segments), self._source_key, self._target_key,
             )
-            results: list[TransliteratedSegment] = []
-            for seg in segments:
-                results.append(self._convert_one(seg, progress_cb))
+            results = [self._convert_one(seg, progress_cb) for seg in segments]
             _log.info("Transliteration complete: %d segments", len(results))
             return results
         except Exception as e:
@@ -73,7 +72,7 @@ class Transliterator:
         """Transliterate a single segment and return a TransliteratedSegment."""
         try:
             source_text: str = seg.get("translated", seg.get("text", ""))  # type: ignore[assignment,call-overload]
-            converted = sanscript.transliterate(source_text, self._source, self._target)
+            converted = self._convert_text(source_text)
             if progress_cb:
                 try:
                     progress_cb(f"Transliterated segment {seg['id'] + 1}")
@@ -92,11 +91,31 @@ class Transliterator:
             _log.error("Segment %s transliteration error: %r", seg.get("id", "?"), e, exc_info=True)  # type: ignore[call-overload]
             raise RuntimeError(f"Segment {seg.get('id', '?')} transliteration error: {e}") from e  # type: ignore[call-overload]
 
+    def _convert_text(self, text: str) -> str:
+        """Route text through the dedicated Urdu<->Roman converter or sanscript, as appropriate."""
+        if self._source_key == _URDU_KEY and self._target_key == _ROMAN_KEY:
+            return urdu_to_roman(text)
+        if self._source_key == _ROMAN_KEY and self._target_key == _URDU_KEY:
+            return roman_to_urdu(text)
+        source = self._resolve(self._source_key)
+        target = self._resolve(self._target_key)
+        converted = sanscript.transliterate(text, source, target)
+        if self._target_key == _URDU_KEY:
+            converted = strip_diacritics(converted)
+        return converted
+
     def _resolve(self, key: str) -> str:
         """Map a user-facing scheme key to an indic-transliteration scheme constant."""
-        resolved = self.SCHEME_MAP.get(key)
+        if key == _URDU_KEY:
+            return "urdu"
+        if key == _ROMAN_KEY:
+            return sanscript.IAST
+        resolved = _INDIC_SCHEME_MAP.get(key)
         if resolved is None:
-            raise ValueError(
-                f"Unknown transliteration scheme: '{key}'. Supported: {list(self.SCHEME_MAP)}"
-            )
+            raise ValueError(f"Unknown transliteration scheme: '{key}'.")
         return resolved
+
+
+def strip_diacritics(text: str) -> str:
+    """Remove Arabic short-vowel diacritics that real Urdu writing normally omits."""
+    return _DIACRITICS_RE.sub("", text)

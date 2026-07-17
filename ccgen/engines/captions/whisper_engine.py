@@ -1,4 +1,4 @@
-# transcriber.py — faster-whisper wrapper producing word-timestamped segments
+# whisper_engine.py — faster-whisper wrapper producing word-timestamped segments
 
 import logging
 import os
@@ -8,11 +8,12 @@ from faster_whisper import WhisperModel
 
 from ccgen.config.defaults import ComputeDefaults, ModelDefaults, TranscriptionDefaults
 from ccgen.core import Segment, WordToken
+from ccgen.engines.captions.base import CaptionEngine
 
 _log = logging.getLogger(__name__)
 
 
-class Transcriber:
+class WhisperEngine(CaptionEngine):
     """Wraps faster-whisper; loads the model once and transcribes on demand."""
 
     def __init__(

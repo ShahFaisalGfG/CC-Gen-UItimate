@@ -5,16 +5,19 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-_log = logging.getLogger(__name__)
-
 from ccgen.config.defaults import OutputDefaults, TranslationDefaults, TransliterationDefaults
 from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
 from ccgen.core.audio import cleanup_temp, extract_audio
 from ccgen.core.subtitle import derive_output_path, write_srt, write_vtt
 from ccgen.core.subtitle_parser import is_subtitle, parse_subtitle
-from ccgen.core.transcriber import Transcriber
-from ccgen.core.transliterator import Transliterator
-from ccgen.core.translator import Translator
+from ccgen.engines.captions import create_engine as create_caption_engine
+from ccgen.engines.captions.base import CaptionEngine
+from ccgen.engines.translation import create_engine as create_translation_engine
+from ccgen.engines.translation.base import TranslationEngine
+from ccgen.engines.transliteration import create_engine as create_transliteration_engine
+from ccgen.engines.transliteration.base import TransliterationEngine
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,6 +41,7 @@ class PipelineConfig:
     translit_source: str = TransliterationDefaults.DEFAULT_SOURCE
     translit_target: str = TransliterationDefaults.DEFAULT_TARGET
     translit_input: str = TransliterationDefaults.INPUT_SOURCE
+    translit_engine: str = TransliterationDefaults.DEFAULT_ENGINE
 
 
 @dataclass
@@ -60,21 +64,25 @@ class Pipeline:
     def __init__(self, config: PipelineConfig) -> None:
         self._config = config
         self._subtitle_input = is_subtitle(config.input_path)
-        self._transcriber: Optional[Transcriber] = (
+        self._transcriber: Optional[CaptionEngine] = (
             None if self._subtitle_input
-            else Transcriber(
+            else create_caption_engine(
                 model_name=config.model_name,
                 device=config.device,
                 compute_type=config.compute_type,
             )
         )
-        self._translator: Optional[Translator] = (
-            Translator(source_lang=config.source_lang, target_lang=config.target_lang)
+        self._translator: Optional[TranslationEngine] = (
+            create_translation_engine(source_lang=config.source_lang, target_lang=config.target_lang)
             if config.translate
             else None
         )
-        self._transliterator: Optional[Transliterator] = (
-            Transliterator(source_scheme=config.translit_source, target_scheme=config.translit_target)
+        self._transliterator: Optional[TransliterationEngine] = (
+            create_transliteration_engine(
+                config.translit_engine,
+                source_scheme=config.translit_source,
+                target_scheme=config.translit_target,
+            )
             if config.transliterate
             else None
         )
@@ -248,13 +256,14 @@ class Pipeline:
                 out.append(path)
 
         if transliterated:
+            tr_suffix = f"_tr_{self._config.translit_source}_{self._config.translit_target}"
             if self._config.emit_srt:
-                path = self._out_path(src, "_tr", ".srt")
+                path = self._out_path(src, tr_suffix, ".srt")
                 _cb(progress_cb, f"Writing {os.path.basename(path)}...")
                 write_srt(transliterated, path, translated=True)
                 out.append(path)
             if self._config.emit_vtt:
-                path = self._out_path(src, "_tr", ".vtt")
+                path = self._out_path(src, tr_suffix, ".vtt")
                 _cb(progress_cb, f"Writing {os.path.basename(path)}...")
                 write_vtt(transliterated, path, translated=True)
                 out.append(path)

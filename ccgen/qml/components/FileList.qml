@@ -39,8 +39,8 @@ Item {
         height: 130
         radius: 12
         visible: transcriptionController.fileModel.count === 0
-        color:        Material.theme === Material.Dark ? "#1c1c1c" : "#f8f8f8"
-        border.color: Material.theme === Material.Dark ? "#3a3a3a" : "#cccccc"
+        color:        appController.colorPanel
+        border.color: appController.colorDivider
         border.width: 1
 
         ColumnLayout {
@@ -55,7 +55,7 @@ Item {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "Drop video, audio, or subtitle files"
-                color: Material.theme === Material.Dark ? "#777777" : "#888888"
+                color: appController.colorTextSecondary
                 font.pixelSize: 12
             }
             Text {
@@ -158,7 +158,7 @@ Item {
             anchors.fill: parent
             radius: 8
             color: Qt.rgba(0, 0.47, 0.83, 0.08)
-            border.color: "#0078d4"
+            border.color: Material.accent
             border.width: 2
             visible: parent.containsDrag
         }
