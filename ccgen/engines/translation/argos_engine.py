@@ -1,4 +1,4 @@
-# translator.py — argostranslate wrapper with offline model management
+# argos_engine.py — argostranslate wrapper with offline model management
 
 import logging
 from typing import Callable, Optional
@@ -8,11 +8,12 @@ import argostranslate.translate
 
 from ccgen.config.defaults import TranslationDefaults
 from ccgen.core import Segment, TranslatedSegment
+from ccgen.engines.translation.base import TranslationEngine
 
 _log = logging.getLogger(__name__)
 
 
-class Translator:
+class ArgosEngine(TranslationEngine):
     """Wraps argostranslate for fully offline, segment-level translation."""
 
     def __init__(

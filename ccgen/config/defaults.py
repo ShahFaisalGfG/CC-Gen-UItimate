@@ -124,12 +124,21 @@ class LanguageOptions:
 
 
 class TransliterationDefaults:
-    """indic-transliteration scheme defaults."""
+    """Transliteration scheme and engine defaults."""
 
     DEFAULT_SOURCE = "roman"
     DEFAULT_TARGET = "ur"
     ENABLED = False
     INPUT_SOURCE = "transcription"
+
+    ENGINE_RULE = "rule"
+    ENGINE_NEURAL = "neural"
+    DEFAULT_ENGINE = ENGINE_RULE
+
+    ENGINES: list[tuple[str, str]] = [
+        ("Rule-based (fast, offline)", ENGINE_RULE),
+        ("Neural (higher quality)", ENGINE_NEURAL),
+    ]
 
     SCHEMES: list[tuple[str, str]] = [
         ("Roman / Latin",      "roman"),
@@ -183,6 +192,7 @@ def get_default_settings() -> dict[str, Any]:
             "source": TransliterationDefaults.DEFAULT_SOURCE,
             "target": TransliterationDefaults.DEFAULT_TARGET,
             "input_source": TransliterationDefaults.INPUT_SOURCE,
+            "engine": TransliterationDefaults.DEFAULT_ENGINE,
         },
         "ui": {
             "theme": "system",

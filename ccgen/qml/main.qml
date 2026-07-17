@@ -67,6 +67,46 @@ ApplicationWindow {
             segCountLabel.text = "Seg " + done + (total > done ? "/" + total : "")
             progressBar.value = total > 0 ? done / total : 0
         }
+
+        function onDefaultsLoaded() {
+            applyDefaults()
+        }
+    }
+
+    // Seed settings-panel widgets from persisted defaults once fetched at startup
+    function applyDefaults() {
+        var models = prefsController.modelOptions
+        var mIdx = models.indexOf(transcriptionController.modelName)
+        modelCombo.currentIndex = mIdx >= 0 ? mIdx : 0
+
+        var langs = prefsController.languageOptions
+        for (var i = 0; i < langs.length; i++) {
+            if (langs[i].code === transcriptionController.language) {
+                langCombo.currentIndex = i
+                break
+            }
+        }
+
+        translateSwitch.checked = transcriptionController.translateEnabled
+        targetLangCombo.currentIndex = indexOfCode(
+            prefsController.targetOptions, transcriptionController.targetLang, 0)
+
+        translitSwitch.checked = transcriptionController.transliterateEnabled
+        translitSrcCombo.currentIndex = indexOfCode(
+            prefsController.translitSchemeOptions, transcriptionController.translitSource, 0)
+        translitTgtCombo.currentIndex = indexOfCode(
+            prefsController.translitSchemeOptions, transcriptionController.translitTarget, 1)
+        translitEngineCombo.currentIndex = indexOfCode(
+            prefsController.translitEngineOptions, transcriptionController.translitEngine, 0)
+
+        srtCheck.checked = transcriptionController.emitSrt
+        vttCheck.checked = transcriptionController.emitVtt
+    }
+
+    function indexOfCode(options, code, fallback) {
+        for (var i = 0; i < options.length; i++)
+            if (options[i].code === code) return i
+        return fallback
     }
 
     // File-picker dialog
@@ -94,8 +134,8 @@ ApplicationWindow {
     // ── Background ─────────────────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
-        color: Material.theme === Material.Dark ? "#1e1e1e" : "#f0f0f0"
-        border.color: Material.theme === Material.Dark ? "#3a3a3a" : "#c0c0c0"
+        color: appController.colorBackground
+        border.color: appController.colorDivider
         border.width: 1
     }
 
@@ -120,7 +160,7 @@ ApplicationWindow {
             Rectangle {
                 width:  260
                 height: parent.height
-                color: Material.theme === Material.Dark ? "#242424" : "#f8f8f8"
+                color: appController.colorPanel
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -131,7 +171,7 @@ ApplicationWindow {
                     Rectangle {
                         Layout.fillWidth:       true
                         Layout.preferredHeight: 36
-                        color: Material.theme === Material.Dark ? "#1e1e1e" : "#ebebeb"
+                        color: appController.colorBackground
 
                         RowLayout {
                             anchors.fill:        parent
@@ -143,70 +183,33 @@ ApplicationWindow {
                                 text: "Files (" + transcriptionController.fileModel.count + ")"
                                 font.pixelSize: 10
                                 font.weight:    Font.Bold
-                                color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                                color: appController.colorTextSecondary
                             }
 
                             Item { Layout.fillWidth: true }
 
-                            // + Files
-                            Rectangle {
-                                Layout.preferredHeight: 24
-                                implicitWidth: _t0.implicitWidth + 16
-                                radius: height / 2
-                                color: _m0.containsMouse ? Qt.rgba(0.5,0.5,0.5,0.12) : "transparent"
-                                Behavior on color { ColorAnimation { duration: 80 } }
-                                Text { id: _t0; anchors.centerIn: parent; text: "+ Files";    font.pixelSize: 10; color: "#0078d4" }
-                                MouseArea { id: _m0; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: filePicker.open() }
+                            PillButton {
+                                label: "+ Files"
+                                activeColor: Material.accent
+                                onClicked: filePicker.open()
                             }
-                            // + Folder
-                            Rectangle {
-                                Layout.preferredHeight: 24
-                                implicitWidth: _t1.implicitWidth + 16
-                                radius: height / 2
-                                color: _m1.containsMouse ? Qt.rgba(0.5,0.5,0.5,0.12) : "transparent"
-                                Behavior on color { ColorAnimation { duration: 80 } }
-                                Text { id: _t1; anchors.centerIn: parent; text: "+ Folder";   font.pixelSize: 10; color: "#0078d4" }
-                                MouseArea { id: _m1; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: folderPicker.open() }
+                            PillButton {
+                                label: "+ Folder"
+                                activeColor: Material.accent
+                                onClicked: folderPicker.open()
                             }
-                            // Select All
-                            Rectangle {
-                                Layout.preferredHeight: 24
-                                implicitWidth: _t2.implicitWidth + 16
-                                radius: height / 2
-                                color: _m2.containsMouse && transcriptionController.fileModel.count > 0
-                                    ? Qt.rgba(0.5,0.5,0.5,0.12) : "transparent"
-                                Behavior on color { ColorAnimation { duration: 80 } }
-                                Text {
-                                    id: _t2; anchors.centerIn: parent; text: "Select All"; font.pixelSize: 10
-                                    color: transcriptionController.fileModel.count > 0
-                                        ? (Material.theme === Material.Dark ? "#cccccc" : "#444444")
-                                        : (Material.theme === Material.Dark ? "#555555" : "#bbbbbb")
-                                }
-                                MouseArea {
-                                    id: _m2; anchors.fill: parent; hoverEnabled: true
-                                    cursorShape: transcriptionController.fileModel.count > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: if (transcriptionController.fileModel.count > 0) transcriptionController.fileModel.selectAll()
-                                }
+                            PillButton {
+                                label: "Select All"
+                                enabled: transcriptionController.fileModel.count > 0
+                                activeColor: Material.theme === Material.Dark ? "#cccccc" : "#444444"
+                                onClicked: transcriptionController.fileModel.selectAll()
                             }
-                            // Remove
-                            Rectangle {
-                                Layout.preferredHeight: 24
-                                implicitWidth: _t3.implicitWidth + 16
-                                radius: height / 2
-                                color: _m3.containsMouse && transcriptionController.fileModel.selectedCount > 0
-                                    ? Qt.rgba(0.91,0.07,0.14,0.08) : "transparent"
-                                Behavior on color { ColorAnimation { duration: 80 } }
-                                Text {
-                                    id: _t3; anchors.centerIn: parent; text: "Remove"; font.pixelSize: 10
-                                    color: transcriptionController.fileModel.selectedCount > 0
-                                        ? "#e81123"
-                                        : (Material.theme === Material.Dark ? "#555555" : "#bbbbbb")
-                                }
-                                MouseArea {
-                                    id: _m3; anchors.fill: parent; hoverEnabled: true
-                                    cursorShape: transcriptionController.fileModel.selectedCount > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: if (transcriptionController.fileModel.selectedCount > 0) transcriptionController.fileModel.removeSelected()
-                                }
+                            PillButton {
+                                label: "Remove"
+                                enabled: transcriptionController.fileModel.selectedCount > 0
+                                activeColor: appController.colorDanger
+                                hoverTint: Qt.rgba(0.91, 0.07, 0.14, 0.08)
+                                onClicked: transcriptionController.fileModel.removeSelected()
                             }
                         }
                     }
@@ -224,7 +227,7 @@ ApplicationWindow {
             Rectangle {
                 width:  1
                 height: parent.height
-                color: Material.theme === Material.Dark ? "#333333" : "#d0d0d0"
+                color: appController.colorDivider
             }
 
             // ── Right panel — settings / output ─────────────────────────
@@ -301,7 +304,7 @@ ApplicationWindow {
                             Rectangle {
                                 Layout.fillWidth:       true
                                 Layout.preferredHeight: 1
-                                color: Material.theme === Material.Dark ? "#333333" : "#e0e0e0"
+                                color: appController.colorDivider
                             }
 
                             // Translate toggle + target lang
@@ -395,10 +398,35 @@ ApplicationWindow {
                                 }
                             }
 
+                            // Transliteration engine (rule-based / neural)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: translitSwitch.checked
+                                Item { Layout.preferredWidth: 110 }
+                                Text {
+                                    text: "Engine"
+                                    font.pixelSize: 11
+                                    color: appController.colorTextSecondary
+                                }
+                                StyledComboBox {
+                                    id: translitEngineCombo
+                                    Layout.preferredWidth:  150
+                                    Layout.preferredHeight: 30
+                                    font.pixelSize: 11
+                                    model: prefsController.translitEngineOptions.map(o => o.label)
+                                    currentIndex: 0
+                                    onCurrentIndexChanged: {
+                                        var opts = prefsController.translitEngineOptions
+                                        if (currentIndex < opts.length)
+                                            transcriptionController.setTranslitEngine(opts[currentIndex].code)
+                                    }
+                                }
+                            }
+
                             Rectangle {
                                 Layout.fillWidth:       true
                                 Layout.preferredHeight: 1
-                                color: Material.theme === Material.Dark ? "#333333" : "#e0e0e0"
+                                color: appController.colorDivider
                             }
 
                             // Output format checkboxes
@@ -434,7 +462,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 text: ""
                                 font.pixelSize: 11
-                                color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                                color: appController.colorTextSecondary
                                 wrapMode: Text.WordWrap
                                 visible: text.length > 0
                             }
@@ -513,7 +541,7 @@ ApplicationWindow {
                                     id: segCountLabel
                                     text: ""
                                     font.pixelSize: 11
-                                    color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                                    color: appController.colorTextSecondary
                                 }
                             }
 
@@ -528,7 +556,7 @@ ApplicationWindow {
                                 id: procStatusLabel
                                 text: statusLabel.text
                                 font.pixelSize: 11
-                                color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                                color: appController.colorTextSecondary
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -537,7 +565,7 @@ ApplicationWindow {
                         Rectangle {
                             Layout.fillWidth:       true
                             Layout.preferredHeight: 1
-                            color: Material.theme === Material.Dark ? "#333333" : "#e0e0e0"
+                            color: appController.colorDivider
                         }
 
                         // Live segment list
@@ -561,7 +589,7 @@ ApplicationWindow {
                         Rectangle {
                             Layout.fillWidth:       true
                             Layout.preferredHeight: 1
-                            color: Material.theme === Material.Dark ? "#333333" : "#e0e0e0"
+                            color: appController.colorDivider
                         }
 
                         // Cancel button
@@ -571,7 +599,7 @@ ApplicationWindow {
                             Layout.preferredHeight: 38
                             text: "Cancel"
                             font.pixelSize: 12
-                            Material.foreground: "#e81123"
+                            Material.foreground: appController.colorDanger
                             onClicked: transcriptionController.cancelProcessing()
                         }
                     }
@@ -629,7 +657,7 @@ ApplicationWindow {
                 text: "✓ " + completionDialog.fileCount + " subtitle file(s) written."
                 font.pixelSize: 13
                 font.weight:    Font.Medium
-                color: "#2e7d32"
+                color: appController.colorSuccess
                 Layout.preferredWidth: 360
                 wrapMode: Text.WordWrap
             }
@@ -651,7 +679,7 @@ ApplicationWindow {
                     color: dirMouse.containsMouse
                         ? (Material.theme === Material.Dark ? "#1a3a5c" : "#e3f2fd")
                         : (Material.theme === Material.Dark ? "#2a2a2a" : "#f5f5f5")
-                    border.color: dirMouse.containsMouse ? "#0078d4"
+                    border.color: dirMouse.containsMouse ? Material.accent
                         : (Material.theme === Material.Dark ? "#444444" : "#dddddd")
                     border.width: 1
 
@@ -671,7 +699,7 @@ ApplicationWindow {
                             text: modelData
                             font.pixelSize: 11
                             font.family:    "Consolas"
-                            color: dirMouse.containsMouse ? "#0078d4" : Material.foreground
+                            color: dirMouse.containsMouse ? Material.accent : Material.foreground
                             elide: Text.ElideMiddle
                             verticalAlignment: Text.AlignVCenter
                             Behavior on color { ColorAnimation { duration: 80 } }
@@ -679,7 +707,7 @@ ApplicationWindow {
                         Text {
                             text: "↗"
                             font.pixelSize: 10
-                            color: "#0078d4"
+                            color: Material.accent
                             visible: dirMouse.containsMouse
                         }
                     }
@@ -734,7 +762,7 @@ ApplicationWindow {
                 Text {
                     text: "By " + appController.appAuthor
                     font.pixelSize: 11
-                    color: Material.theme === Material.Dark ? "#888888" : "#777777"
+                    color: appController.colorTextSecondary
                 }
             }
         }

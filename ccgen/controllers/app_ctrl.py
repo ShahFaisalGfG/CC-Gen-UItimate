@@ -31,6 +31,13 @@ class AppController(QObject):
     logAppended  = Signal(str)
     logsCleared  = Signal()
 
+    _COLOR_TOKENS: dict[str, dict[str, str]] = {
+        "colorBackground":    {"dark": "#1e1e1e", "light": "#f0f0f0"},
+        "colorPanel":         {"dark": "#242424", "light": "#f8f8f8"},
+        "colorDivider":       {"dark": "#333333", "light": "#e0e0e0"},
+        "colorTextSecondary": {"dark": "#888888", "light": "#777777"},
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._logs: list[str] = []
@@ -44,6 +51,36 @@ class AppController(QObject):
     def currentTheme(self) -> str:
         """Resolved theme name: 'light' or 'dark'."""
         return self._theme
+
+    @Property(str, notify=themeChanged)
+    def colorBackground(self) -> str:
+        """Main window background color for the current theme."""
+        return self._COLOR_TOKENS["colorBackground"][self._theme]
+
+    @Property(str, notify=themeChanged)
+    def colorPanel(self) -> str:
+        """Secondary panel background color for the current theme."""
+        return self._COLOR_TOKENS["colorPanel"][self._theme]
+
+    @Property(str, notify=themeChanged)
+    def colorDivider(self) -> str:
+        """Divider line and border color for the current theme."""
+        return self._COLOR_TOKENS["colorDivider"][self._theme]
+
+    @Property(str, notify=themeChanged)
+    def colorTextSecondary(self) -> str:
+        """Muted secondary text color for the current theme."""
+        return self._COLOR_TOKENS["colorTextSecondary"][self._theme]
+
+    @Property(str, constant=True)
+    def colorDanger(self) -> str:
+        """Destructive-action color, theme-independent."""
+        return "#e81123"
+
+    @Property(str, constant=True)
+    def colorSuccess(self) -> str:
+        """Success/positive status color, theme-independent."""
+        return "#2e7d32"
 
     @Property(str, constant=True)
     def appName(self) -> str:

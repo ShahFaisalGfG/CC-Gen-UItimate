@@ -3,6 +3,7 @@
   "venvPath": ".",
   "venv": ".venv",
   "typeCheckingMode": "standard",
-  "include": ["ccgen", "main.py", "app.py", "tests"],
-  "reportMissingImports": "warning"
+  "include": ["ccgen", "main.py", "app.py", "server.py", "tests"],
+  "reportMissingImports": "warning",
+  "reportPrivateImportUsage": "none"
 }

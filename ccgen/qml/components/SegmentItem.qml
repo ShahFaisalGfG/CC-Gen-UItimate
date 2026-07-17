@@ -26,7 +26,7 @@ Rectangle {
         Text {
             id: tsLabel
             text: _formatTime(segItem.segStart)
-            color: "#0078d4"
+            color: Material.accent
             font.family: "Consolas"
             font.pixelSize: 11
             width: 64
