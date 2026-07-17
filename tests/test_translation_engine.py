@@ -1,60 +1,60 @@
-# test_translator.py — unit tests for ccgen.core.translator
+# test_translation_engine.py — unit tests for ccgen.engines.translation.argos_engine
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ccgen.core.translator import Translator
+from ccgen.engines.translation.argos_engine import ArgosEngine
 
 
-class TestTranslator:
-    def _make_translator(self, installed: bool = False) -> Translator:
-        t = Translator(source_lang="en", target_lang="es")
+class TestArgosEngine:
+    def _make_translator(self, installed: bool = False) -> ArgosEngine:
+        t = ArgosEngine(source_lang="en", target_lang="es")
         if installed:
             pkg = MagicMock()
             pkg.from_code = "en"
             pkg.to_code = "es"
             with patch(
-                "ccgen.core.translator.argostranslate.package.get_installed_packages",
+                "ccgen.engines.translation.argos_engine.argostranslate.package.get_installed_packages",
                 return_value=[pkg],
             ):
                 engine = MagicMock()
                 engine.translate.return_value = "Hola mundo"
                 with patch(
-                    "ccgen.core.translator.argostranslate.translate.get_translation_from_codes",
+                    "ccgen.engines.translation.argos_engine.argostranslate.translate.get_translation_from_codes",
                     return_value=engine,
                 ):
                     t.ensure_model()
         return t
 
     def test_ensure_model_skips_download_when_installed(self):
-        t = Translator(source_lang="en", target_lang="es")
+        t = ArgosEngine(source_lang="en", target_lang="es")
         pkg = MagicMock()
         pkg.from_code = "en"
         pkg.to_code = "es"
         engine = MagicMock()
 
         with patch(
-            "ccgen.core.translator.argostranslate.package.get_installed_packages",
+            "ccgen.engines.translation.argos_engine.argostranslate.package.get_installed_packages",
             return_value=[pkg],
         ):
             with patch(
-                "ccgen.core.translator.argostranslate.translate.get_translation_from_codes",
+                "ccgen.engines.translation.argos_engine.argostranslate.translate.get_translation_from_codes",
                 return_value=engine,
             ):
                 with patch(
-                    "ccgen.core.translator.argostranslate.package.update_package_index"
+                    "ccgen.engines.translation.argos_engine.argostranslate.package.update_package_index"
                 ) as mock_update:
                     t.ensure_model()
                     mock_update.assert_not_called()
 
     def test_translate_without_ensure_raises(self, sample_segments):
-        t = Translator()
+        t = ArgosEngine()
         with pytest.raises(RuntimeError, match="ensure_model"):
             t.translate_segments(sample_segments)
 
     def test_translate_returns_translated_segments(self, sample_segments):
-        t = Translator(source_lang="en", target_lang="es")
+        t = ArgosEngine(source_lang="en", target_lang="es")
         pkg = MagicMock()
         pkg.from_code = "en"
         pkg.to_code = "es"
@@ -62,11 +62,11 @@ class TestTranslator:
         engine.translate.return_value = "Hola mundo, esto es una prueba."
 
         with patch(
-            "ccgen.core.translator.argostranslate.package.get_installed_packages",
+            "ccgen.engines.translation.argos_engine.argostranslate.package.get_installed_packages",
             return_value=[pkg],
         ):
             with patch(
-                "ccgen.core.translator.argostranslate.translate.get_translation_from_codes",
+                "ccgen.engines.translation.argos_engine.argostranslate.translate.get_translation_from_codes",
                 return_value=engine,
             ):
                 t.ensure_model()
@@ -79,28 +79,28 @@ class TestTranslator:
         assert result[0]["end"] == sample_segments[0]["end"]
 
     def test_list_installed_returns_strings(self):
-        t = Translator()
+        t = ArgosEngine()
         pkg = MagicMock()
         pkg.from_code = "en"
         pkg.to_code = "es"
         with patch(
-            "ccgen.core.translator.argostranslate.package.get_installed_packages",
+            "ccgen.engines.translation.argos_engine.argostranslate.package.get_installed_packages",
             return_value=[pkg],
         ):
             result = t.list_installed()
         assert result == ["en→es"]
 
     def test_unavailable_pair_raises(self):
-        t = Translator(source_lang="xx", target_lang="yy")
+        t = ArgosEngine(source_lang="xx", target_lang="yy")
         with patch(
-            "ccgen.core.translator.argostranslate.package.get_installed_packages",
+            "ccgen.engines.translation.argos_engine.argostranslate.package.get_installed_packages",
             return_value=[],
         ):
             with patch(
-                "ccgen.core.translator.argostranslate.package.update_package_index"
+                "ccgen.engines.translation.argos_engine.argostranslate.package.update_package_index"
             ):
                 with patch(
-                    "ccgen.core.translator.argostranslate.package.get_available_packages",
+                    "ccgen.engines.translation.argos_engine.argostranslate.package.get_available_packages",
                     return_value=[],
                 ):
                     with pytest.raises(RuntimeError, match="No translation package"):

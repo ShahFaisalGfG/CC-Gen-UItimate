@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from ccgen.config.defaults import ModelDefaults, TranslationDefaults
+from ccgen.config.defaults import ModelDefaults, TranslationDefaults, TransliterationDefaults
 from ccgen.core.pipeline import Pipeline, PipelineConfig
 
 
@@ -77,6 +77,33 @@ def _parse_args() -> argparse.Namespace:
         help="Also emit a WebVTT (.vtt) subtitle file.",
     )
     p.add_argument(
+        "--transliterate",
+        action="store_true",
+        help="Transliterate the transcription (or translation) into another script.",
+    )
+    p.add_argument(
+        "--translit-source",
+        default=TransliterationDefaults.DEFAULT_SOURCE,
+        help="Transliteration source scheme code (default: roman).",
+    )
+    p.add_argument(
+        "--translit-target",
+        default=TransliterationDefaults.DEFAULT_TARGET,
+        help="Transliteration target scheme code (default: ur).",
+    )
+    p.add_argument(
+        "--translit-input",
+        default=TransliterationDefaults.INPUT_SOURCE,
+        choices=["transcription", "translation"],
+        help="Text to transliterate from (default: transcription).",
+    )
+    p.add_argument(
+        "--translit-engine",
+        default=TransliterationDefaults.DEFAULT_ENGINE,
+        choices=[TransliterationDefaults.ENGINE_RULE, TransliterationDefaults.ENGINE_NEURAL],
+        help="Transliteration engine to use (default: rule).",
+    )
+    p.add_argument(
         "--output-dir",
         default=None,
         help="Directory for output subtitle files (default: same dir as input).",
@@ -100,6 +127,11 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
         target_lang=args.target_lang,
         emit_srt=True,
         emit_vtt=args.vtt,
+        transliterate=args.transliterate,
+        translit_source=args.translit_source,
+        translit_target=args.translit_target,
+        translit_input=args.translit_input,
+        translit_engine=args.translit_engine,
     )
 
 

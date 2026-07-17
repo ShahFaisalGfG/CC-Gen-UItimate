@@ -149,7 +149,7 @@ Item {
         Rectangle {
             width: 46; height: parent.height
             visible: titleBar.showClose
-            color: closeHover.hovered ? "#e81123" : "transparent"
+            color: closeHover.hovered ? appController.colorDanger : "transparent"
             Behavior on color { ColorAnimation { duration: 100 } }
 
             Text {

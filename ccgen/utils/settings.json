@@ -29,7 +29,8 @@
     "enabled": false,
     "source": "roman",
     "target": "ur",
-    "input_source": "transcription"
+    "input_source": "transcription",
+    "engine": "rule"
   },
   "ui": {
     "theme": "light"

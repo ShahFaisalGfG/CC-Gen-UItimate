@@ -39,8 +39,7 @@ Rectangle {
         ? (Material.theme === Material.Dark ? "#1a3a5c" : "#cce4f7")
         : (Material.theme === Material.Dark ? "#2a2a2a" : "#ffffff")
 
-    border.color: isSelected ? "#0078d4"
-        : (Material.theme === Material.Dark ? "#3a3a3a" : "#e0e0e0")
+    border.color: isSelected ? Material.accent : appController.colorDivider
     border.width: isSelected ? 2 : 1
 
     Behavior on color { ColorAnimation { duration: 80 } }
@@ -107,7 +106,7 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: fileItem.fileSize
-                color: Material.theme === Material.Dark ? "#888888" : "#767676"
+                color: appController.colorTextSecondary
                 font.pixelSize: 11
             }
         }
@@ -123,10 +122,10 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 color: {
                     switch (fileItem.fileStatus) {
-                        case "processing": return "#0078d4"
-                        case "done":       return "#2e7d32"
-                        case "error":      return "#e81123"
-                        default:           return "#888888"
+                        case "processing": return Material.accent
+                        case "done":       return appController.colorSuccess
+                        case "error":      return appController.colorDanger
+                        default:           return appController.colorTextSecondary
                     }
                 }
 
@@ -151,9 +150,9 @@ Rectangle {
                 font.pixelSize: 10
                 color: {
                     switch (fileItem.fileStatus) {
-                        case "done":  return "#2e7d32"
-                        case "error": return "#e81123"
-                        default:      return "#888888"
+                        case "done":  return appController.colorSuccess
+                        case "error": return appController.colorDanger
+                        default:      return appController.colorTextSecondary
                     }
                 }
             }
@@ -205,15 +204,14 @@ Rectangle {
         anchors.rightMargin:    10
         anchors.verticalCenter: parent.verticalCenter
         visible: itemHover.hovered
-        color: removeMouse.containsMouse ? "#e81123" : "transparent"
+        color: removeMouse.containsMouse ? appController.colorDanger : "transparent"
         Behavior on color { ColorAnimation { duration: 80 } }
 
         Text {
             anchors.centerIn: parent
             text:  "✕"
             font.pixelSize: 10
-            color: removeMouse.containsMouse ? "#ffffff"
-                : (Material.theme === Material.Dark ? "#888888" : "#777777")
+            color: removeMouse.containsMouse ? "#ffffff" : appController.colorTextSecondary
             Behavior on color { ColorAnimation { duration: 80 } }
         }
 
