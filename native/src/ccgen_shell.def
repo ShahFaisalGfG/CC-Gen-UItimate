@@ -1,0 +1,4 @@
+LIBRARY ccgen_shell
+EXPORTS
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE

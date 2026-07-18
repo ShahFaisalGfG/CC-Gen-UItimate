@@ -7,7 +7,7 @@ name = "ccgen"
 version = "1.0.0"
 description = "Offline video/audio transcription and subtitle generation"
 authors = [{ name = "Shah Faisal", email = "shahfaisalgfg@gmail.com" }]
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
@@ -28,7 +28,7 @@ dependencies = [
 ccgen = "main:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pyright>=1.1"]
+dev = ["pytest>=8.0", "pyright>=1.1", "pyinstaller>=6.17"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -43,3 +43,10 @@ reportPrivateImportUsage = "none"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ccgen*"]
+
+[tool.ccgen]
+display_name = "CC-Gen-Ultimate"
+publisher    = "gfgRoyal"
+url          = "https://shahfaisalgfg.github.io/shahfaisal/"
+exe_name     = "CC-Gen-Ultimate.exe"
+winget_id    = "gfgRoyal.CCGenUltimate"
