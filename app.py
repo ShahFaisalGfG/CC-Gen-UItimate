@@ -60,6 +60,11 @@ def main() -> None:
     prefs_ctrl = PrefsController(api_server.base_url)
     _log.debug("Controllers ready")
 
+    input_paths = [p for p in sys.argv[1:] if os.path.isfile(p)]
+    if input_paths:
+        trans_ctrl.addFiles(input_paths)
+        _log.info("Queued %d file(s) from command line", len(input_paths))
+
     engine = QQmlApplicationEngine()
     ctx = engine.rootContext()
     ctx.setContextProperty("appController",           app_ctrl)
