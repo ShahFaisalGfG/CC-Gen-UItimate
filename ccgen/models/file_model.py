@@ -244,7 +244,8 @@ class MediaFileModel(QAbstractListModel):
     def _add_one(self, path: str) -> None:
         """Add a single file if it exists and is not already in the queue."""
         path = os.path.normpath(path)
-        if any(f["path"] == path for f in self._files):
+        dedup_key = os.path.normcase(path)
+        if any(os.path.normcase(f["path"]) == dedup_key for f in self._files):
             return
         if not os.path.isfile(path):
             return

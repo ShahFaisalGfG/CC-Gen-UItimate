@@ -10,7 +10,11 @@ class TranslationEngine(ABC):
     """Common interface every translation engine (argos, future engines) must implement."""
 
     @abstractmethod
-    def ensure_model(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
+    def ensure_model(
+        self,
+        progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Download and install the language pair model when not already present."""
 
     @abstractmethod
@@ -18,6 +22,7 @@ class TranslationEngine(ABC):
         self,
         segments: list[Segment],
         progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TranslatedSegment]:
         """Translate a segment list, preserving all timing from the source."""
 

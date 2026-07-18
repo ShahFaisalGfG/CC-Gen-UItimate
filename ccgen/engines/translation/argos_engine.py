@@ -9,6 +9,7 @@ import argostranslate.translate
 from ccgen.config.defaults import TranslationDefaults
 from ccgen.core import Segment, TranslatedSegment
 from ccgen.engines.translation.base import TranslationEngine
+from ccgen.utils.download_progress import download_progress
 
 _log = logging.getLogger(__name__)
 
@@ -25,7 +26,11 @@ class ArgosEngine(TranslationEngine):
         self._target_lang = target_lang
         self._engine: Optional[argostranslate.translate.ITranslation] = None
 
-    def ensure_model(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
+    def ensure_model(
+        self,
+        progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Download and install the language pair model when not already present.
 
         Raises RuntimeError when the pair is unsupported or download fails.
@@ -37,7 +42,7 @@ class ArgosEngine(TranslationEngine):
                 _log.debug("Translation model already installed")
                 return
             _cb(progress_cb, f"Downloading translation model {self._source_lang}→{self._target_lang}...")
-            self._download_and_install()
+            self._download_and_install(progress_num_cb)
             self._engine = self._get_engine()
             _cb(progress_cb, "Translation model ready.")
             _log.info("Translation model ready: %s→%s", self._source_lang, self._target_lang)
@@ -53,6 +58,7 @@ class ArgosEngine(TranslationEngine):
         self,
         segments: list[Segment],
         progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TranslatedSegment]:
         """Translate a segment list, preserving all timing from the source.
 
@@ -62,7 +68,11 @@ class ArgosEngine(TranslationEngine):
             if self._engine is None:
                 raise RuntimeError("Call ensure_model() before translate_segments().")
             _log.info("Translating %d segments (%s→%s)", len(segments), self._source_lang, self._target_lang)
-            results = [self._translate_one(seg, progress_cb) for seg in segments]
+            total = len(segments)
+            results = [
+                self._translate_one(seg, idx + 1, total, progress_cb, progress_num_cb)
+                for idx, seg in enumerate(segments)
+            ]
             _log.info("Translation complete: %d segments", len(results))
             return results
         except RuntimeError:
@@ -96,7 +106,9 @@ class ArgosEngine(TranslationEngine):
         except Exception:
             return False
 
-    def _download_and_install(self) -> None:
+    def _download_and_install(
+        self, progress_num_cb: Optional[Callable[[int, int], None]] = None
+    ) -> None:
         """Fetch the package index and install the required language pair."""
         try:
             _log.info("Downloading package index for %s→%s", self._source_lang, self._target_lang)
@@ -114,7 +126,9 @@ class ArgosEngine(TranslationEngine):
                     f"No translation package for {self._source_lang}→{self._target_lang}."
                 )
             _log.info("Installing package: %s→%s", self._source_lang, self._target_lang)
-            argostranslate.package.install_from_path(pkg.download())
+            with download_progress(progress_num_cb):
+                archive_path = pkg.download()
+            argostranslate.package.install_from_path(archive_path)
         except RuntimeError:
             raise
         except Exception as e:
@@ -135,12 +149,16 @@ class ArgosEngine(TranslationEngine):
     def _translate_one(
         self,
         seg: Segment,
+        position: int,
+        total: int,
         progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> TranslatedSegment:
         """Translate a single segment and wrap it into a TranslatedSegment."""
         text = seg["text"].strip()
         translated = self._engine.translate(text)  # type: ignore[union-attr]
         _cb(progress_cb, f"Translated segment {seg['id'] + 1}")
+        _num_cb(progress_num_cb, position, total)
         return TranslatedSegment(
             id=seg["id"],
             start=seg["start"],
@@ -156,5 +174,14 @@ def _cb(fn: Optional[Callable[[str], None]], msg: str) -> None:
     try:
         if fn:
             fn(msg)
+    except Exception:
+        pass
+
+
+def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+    """Call a numeric progress callback safely when present."""
+    try:
+        if fn:
+            fn(done, total)
     except Exception:
         pass

@@ -73,7 +73,6 @@ class JobManager:
     ) -> None:
         """Run pipeline.prepare()+run() in a worker thread, forwarding events into the queue."""
         loop = asyncio.get_running_loop()
-        segments_done = 0
 
         def emit(event: dict[str, Any]) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, event)
@@ -82,16 +81,16 @@ class JobManager:
             emit({"event": "status", "message": message})
 
         def segment_cb(seg: Segment) -> None:
-            nonlocal segments_done
-            segments_done += 1
             emit({
                 "event": "segment",
                 "id": seg["id"], "start": seg["start"], "end": seg["end"], "text": seg["text"],
             })
-            emit({"event": "progress", "done": segments_done, "total": 0})
+
+        def progress_num_cb(done: int, total: int) -> None:
+            emit({"event": "progress", "done": done, "total": total})
 
         try:
-            await loop.run_in_executor(None, pipeline.prepare, status_cb)
+            await loop.run_in_executor(None, pipeline.prepare, status_cb, progress_num_cb)
             if job_id in self._cancelled:
                 emit({
                     "event": "finished", "success": False,
@@ -99,7 +98,7 @@ class JobManager:
                 })
                 return
             result = await loop.run_in_executor(
-                None, lambda: pipeline.run(status_cb, segment_cb)
+                None, lambda: pipeline.run(status_cb, segment_cb, progress_num_cb)
             )
             self._results[job_id] = result
             emit({

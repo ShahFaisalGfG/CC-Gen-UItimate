@@ -50,6 +50,7 @@ class RuleEngine(TransliterationEngine):
         self,
         segments: Union[list[Segment], list[TranslatedSegment]],
         progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Transliterate a segment list between scripts, preserving timing."""
         try:
@@ -57,7 +58,11 @@ class RuleEngine(TransliterationEngine):
                 "Rule engine transliterating %d segments: %s → %s",
                 len(segments), self._source_key, self._target_key,
             )
-            results = [self._convert_one(seg, progress_cb) for seg in segments]
+            total = len(segments)
+            results = [
+                self._convert_one(seg, idx + 1, total, progress_cb, progress_num_cb)
+                for idx, seg in enumerate(segments)
+            ]
             _log.info("Transliteration complete: %d segments", len(results))
             return results
         except Exception as e:
@@ -67,7 +72,10 @@ class RuleEngine(TransliterationEngine):
     def _convert_one(
         self,
         seg: Union[Segment, TranslatedSegment],
+        position: int,
+        total: int,
         progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> TransliteratedSegment:
         """Transliterate a single segment and return a TransliteratedSegment."""
         try:
@@ -78,6 +86,7 @@ class RuleEngine(TransliterationEngine):
                     progress_cb(f"Transliterated segment {seg['id'] + 1}")
                 except Exception:
                     pass
+            _num_cb(progress_num_cb, position, total)
             return TransliteratedSegment(
                 id=seg["id"],
                 start=seg["start"],
@@ -119,3 +128,12 @@ class RuleEngine(TransliterationEngine):
 def strip_diacritics(text: str) -> str:
     """Remove Arabic short-vowel diacritics that real Urdu writing normally omits."""
     return _DIACRITICS_RE.sub("", text)
+
+
+def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+    """Call a numeric progress callback safely when present."""
+    try:
+        if fn:
+            fn(done, total)
+    except Exception:
+        pass

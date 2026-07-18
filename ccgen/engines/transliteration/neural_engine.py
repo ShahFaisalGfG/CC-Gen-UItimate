@@ -16,6 +16,7 @@ from transformers import AutoTokenizer, M2M100ForConditionalGeneration, PreTrain
 from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
 from ccgen.engines.transliteration.base import TransliterationEngine
 from ccgen.engines.transliteration.rekhta_backend import RekhtaBackend
+from ccgen.utils.download_progress import download_progress
 
 _log = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class NeuralEngine(TransliterationEngine):
         self,
         segments: Union[list[Segment], list[TranslatedSegment]],
         progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Transliterate a segment list between scripts, preserving timing."""
         try:
@@ -55,41 +57,58 @@ class NeuralEngine(TransliterationEngine):
                 "Neural engine transliterating %d segments: %s → %s",
                 len(segments), self._source_key, self._target_key,
             )
-            self._ensure_loaded(progress_cb)
-            results = [self._convert_one(seg, progress_cb) for seg in segments]
+            self._ensure_loaded(progress_cb, progress_num_cb)
+            total = len(segments)
+            results = [
+                self._convert_one(seg, idx + 1, total, progress_cb, progress_num_cb)
+                for idx, seg in enumerate(segments)
+            ]
             _log.info("Transliteration complete: %d segments", len(results))
             return results
         except Exception as e:
             _log.error("Neural transliteration failed: %r", e, exc_info=True)
             raise RuntimeError(f"Neural transliteration failed: {e}") from e
 
-    def _ensure_loaded(self, progress_cb: Optional[Callable[[str], None]]) -> None:
+    def _ensure_loaded(
+        self,
+        progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Load whichever backend the current scheme pair needs, once."""
         pair = (self._source_key, self._target_key)
         if pair in _M2M100_MODELS:
             if self._m2m_model is None:
-                self._load_m2m100(pair, progress_cb)
+                self._load_m2m100(pair, progress_cb, progress_num_cb)
             return
         if self._source_key in ("hi", "pa") and self._target_key == "ur":
             if not self._rekhta_loaded:
-                self._rekhta.load(progress_cb)
+                self._rekhta.load(progress_cb, progress_num_cb)
                 self._rekhta_loaded = True
             return
         raise ValueError(f"No neural engine available for {self._source_key} → {self._target_key}")
 
-    def _load_m2m100(self, pair: tuple[str, str], progress_cb: Optional[Callable[[str], None]]) -> None:
+    def _load_m2m100(
+        self,
+        pair: tuple[str, str],
+        progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Download and load the Mavkif m2m100 fine-tune for one Urdu<->Roman direction."""
         model_id = _M2M100_MODELS[pair]
         _cb(progress_cb, f"Downloading neural transliteration model ({model_id})...")
-        self._m2m_tokenizer = AutoTokenizer.from_pretrained(_TOKENIZER_MODEL)
-        self._m2m_model = M2M100ForConditionalGeneration.from_pretrained(model_id)
+        with download_progress(progress_num_cb):
+            self._m2m_tokenizer = AutoTokenizer.from_pretrained(_TOKENIZER_MODEL)
+            self._m2m_model = M2M100ForConditionalGeneration.from_pretrained(model_id)
         self._m2m_model.eval()
         _cb(progress_cb, "Neural transliteration model ready.")
 
     def _convert_one(
         self,
         seg: Union[Segment, TranslatedSegment],
+        position: int,
+        total: int,
         progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> TransliteratedSegment:
         """Transliterate a single segment and return a TransliteratedSegment."""
         try:
@@ -100,6 +119,7 @@ class NeuralEngine(TransliterationEngine):
                     progress_cb(f"Transliterated segment {seg['id'] + 1}")
                 except Exception:
                     pass
+            _num_cb(progress_num_cb, position, total)
             return TransliteratedSegment(
                 id=seg["id"],
                 start=seg["start"],
@@ -147,5 +167,14 @@ def _cb(fn: Optional[Callable[[str], None]], msg: str) -> None:
     try:
         if fn:
             fn(msg)
+    except Exception:
+        pass
+
+
+def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+    """Call a numeric progress callback safely when present."""
+    try:
+        if fn:
+            fn(done, total)
     except Exception:
         pass
