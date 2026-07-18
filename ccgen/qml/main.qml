@@ -37,6 +37,7 @@ ApplicationWindow {
         }
 
         function onOperationFinished(success, errorMsg, outputFiles) {
+            prefsController.refreshModelStatus()
             if (!success) {
                 statusLabel.text = "✗ " + (errorMsg || "Unknown error")
             } else {
@@ -64,7 +65,7 @@ ApplicationWindow {
         }
 
         function onProgressChanged(done, total) {
-            segCountLabel.text = "Seg " + done + (total > done ? "/" + total : "")
+            segCountLabel.text = total > 0 ? Math.round(100 * done / total) + "%" : ""
             progressBar.value = total > 0 ? done / total : 0
         }
 
@@ -107,6 +108,26 @@ ApplicationWindow {
         for (var i = 0; i < options.length; i++)
             if (options[i].code === code) return i
         return fallback
+    }
+
+    // Downloaded/needs-download indicator maps, keyed by the label shown in each combo box
+    function targetDownloadStatus() {
+        var status = {}
+        var opts = prefsController.targetOptions
+        for (var i = 0; i < opts.length; i++)
+            status[opts[i].label] = prefsController.isTranslationReady(transcriptionController.language, opts[i].code)
+        return status
+    }
+
+    function engineDownloadStatus() {
+        var status = {}
+        var opts = prefsController.translitEngineOptions
+        for (var i = 0; i < opts.length; i++) {
+            status[opts[i].label] = opts[i].code === "neural"
+                ? prefsController.isNeuralReady(transcriptionController.translitSource, transcriptionController.translitTarget)
+                : true
+        }
+        return status
     }
 
     // File-picker dialog
@@ -268,6 +289,7 @@ ApplicationWindow {
                                     Layout.preferredHeight: 34
                                     font.pixelSize:         12
                                     model: prefsController.modelOptions
+                                    downloadStatus: prefsController.modelStatus
                                     Component.onCompleted: {
                                         var idx = model.indexOf("base")
                                         currentIndex = idx >= 0 ? idx : 0
@@ -328,6 +350,7 @@ ApplicationWindow {
                                     font.pixelSize:         12
                                     visible: translateSwitch.checked
                                     model: prefsController.targetOptions.map(o => o.label)
+                                    downloadStatus: targetDownloadStatus()
                                     currentIndex: {
                                         var opts = prefsController.targetOptions
                                         for (var i = 0; i < opts.length; i++)
@@ -414,6 +437,7 @@ ApplicationWindow {
                                     Layout.preferredHeight: 30
                                     font.pixelSize: 11
                                     model: prefsController.translitEngineOptions.map(o => o.label)
+                                    downloadStatus: engineDownloadStatus()
                                     currentIndex: 0
                                     onCurrentIndexChanged: {
                                         var opts = prefsController.translitEngineOptions

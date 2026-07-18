@@ -87,29 +87,31 @@ class Pipeline:
             else None
         )
 
-    def prepare(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
+    def prepare(
+        self,
+        progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Load all models, downloading on first use. Call once before run().
 
         Skips Whisper loading when the input is an SRT/VTT file.
         Translator model is pre-loaded only when source language is explicit (not 'auto').
         Raises RuntimeError on model load failure so the caller can surface it early.
         """
-        try:
-            if self._transcriber is not None:
-                self._transcriber.load(progress_cb)
-            can_preload = (
-                self._translator is not None
-                and self._config.source_lang != "auto"
-            )
-            if can_preload:
-                self._translator.ensure_model(progress_cb)  # type: ignore[union-attr]
-        except RuntimeError:
-            raise
+        if self._transcriber is not None:
+            self._transcriber.load(progress_cb, progress_num_cb)
+        can_preload = (
+            self._translator is not None
+            and self._config.source_lang != "auto"
+        )
+        if can_preload:
+            self._translator.ensure_model(progress_cb, progress_num_cb)  # type: ignore[union-attr]
 
     def run(
         self,
         progress_cb: Optional[Callable[[str], None]] = None,
         segment_cb: Optional[Callable[[Segment], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> PipelineResult:
         """Execute the full pipeline. Never raises — returns PipelineResult on both success and failure."""
         _log.info("Pipeline starting: %s", os.path.basename(self._config.input_path))
@@ -128,11 +130,12 @@ class Pipeline:
                     vad_filter=self._config.vad_filter,
                     progress_cb=progress_cb,
                     segment_cb=segment_cb,
+                    progress_num_cb=progress_num_cb,
                 )
                 detected_lang = segments[0]["language"] if segments else ""
 
-            translated_segs = self._translate(segments, detected_lang, progress_cb)
-            translit_segs = self._transliterate(segments, translated_segs, progress_cb)
+            translated_segs = self._translate(segments, detected_lang, progress_cb, progress_num_cb)
+            translit_segs = self._transliterate(segments, translated_segs, progress_cb, progress_num_cb)
             output_files = self._write_outputs(segments, translated_segs, translit_segs, progress_cb)
 
             _cb(progress_cb, "Done.")
@@ -179,6 +182,7 @@ class Pipeline:
         segments: list[Segment],
         detected_lang: str,
         progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TranslatedSegment]:
         """Run translation when enabled; resolves 'auto' source language."""
         if self._translator is None or not segments:
@@ -193,8 +197,8 @@ class Pipeline:
                 )
             _log.debug("Translating %d segments: %s → %s", len(segments), src, self._config.target_lang)
             self._translator.set_pair(src, self._config.target_lang)
-            self._translator.ensure_model(progress_cb)
-            return self._translator.translate_segments(segments, progress_cb)
+            self._translator.ensure_model(progress_cb, progress_num_cb)
+            return self._translator.translate_segments(segments, progress_cb, progress_num_cb)
         except Exception as e:
             _log.error("Translation step failed: %r", e, exc_info=True)
             raise RuntimeError(f"Translation step failed: {e}") from e
@@ -204,6 +208,7 @@ class Pipeline:
         segments: list[Segment],
         translated: list[TranslatedSegment],
         progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Run transliteration when enabled; picks input from transcription or translation."""
         if self._transliterator is None:
@@ -214,7 +219,7 @@ class Pipeline:
                 translated if self._config.translit_input == "translation" and translated
                 else segments
             )
-            return self._transliterator.transliterate_segments(source_segs, progress_cb)
+            return self._transliterator.transliterate_segments(source_segs, progress_cb, progress_num_cb)
         except Exception as e:
             _log.error("Transliteration step failed: %r", e, exc_info=True)
             raise RuntimeError(f"Transliteration step failed: {e}") from e

@@ -18,6 +18,8 @@ import torch
 from huggingface_hub import hf_hub_download
 from torch import nn
 
+from ccgen.utils.download_progress import download_progress
+
 _log = logging.getLogger(__name__)
 
 _REPO_ID = "rekhtalabs/hi-2-ur-translit"
@@ -88,16 +90,21 @@ class RekhtaBackend:
         self._src_sp: Optional[spm.SentencePieceProcessor] = None
         self._tgt_sp: Optional[spm.SentencePieceProcessor] = None
 
-    def load(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
+    def load(
+        self,
+        progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Download (on first use) and load the checkpoint and tokenizers into memory.
 
         Raises RuntimeError when the download or checkpoint load fails.
         """
         try:
             _cb(progress_cb, "Downloading Hindi→Urdu transliteration model...")
-            checkpoint_path = hf_hub_download(_REPO_ID, _CHECKPOINT_FILE)
-            src_tok_path = hf_hub_download(_REPO_ID, _SRC_TOKENIZER_FILE)
-            tgt_tok_path = hf_hub_download(_REPO_ID, _TGT_TOKENIZER_FILE)
+            with download_progress(progress_num_cb):
+                checkpoint_path = hf_hub_download(_REPO_ID, _CHECKPOINT_FILE)
+                src_tok_path = hf_hub_download(_REPO_ID, _SRC_TOKENIZER_FILE)
+                tgt_tok_path = hf_hub_download(_REPO_ID, _TGT_TOKENIZER_FILE)
 
             self._src_sp = spm.SentencePieceProcessor(model_file=src_tok_path)  # type: ignore[reportCallIssue]
             self._tgt_sp = spm.SentencePieceProcessor(model_file=tgt_tok_path)  # type: ignore[reportCallIssue]

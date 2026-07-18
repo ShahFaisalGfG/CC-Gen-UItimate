@@ -19,7 +19,13 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
     _log.info("CC-Gen-Ultimate API stopping")
 
 
-app = FastAPI(title="CC-Gen-Ultimate API", lifespan=_lifespan)
+app = FastAPI(
+    title="CC-Gen-Ultimate API",
+    lifespan=_lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.include_router(settings.router)
 app.include_router(options.router)
 app.include_router(jobs.router)

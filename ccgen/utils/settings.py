@@ -49,8 +49,15 @@ def merge_settings(
     defaults: dict[str, Any],
     overrides: dict[str, Any],
 ) -> dict[str, Any]:
-    """Deep-merge overrides onto defaults, preserving all nested default keys."""
-    result = defaults.copy()
+    """Deep-merge overrides onto defaults, preserving all nested default keys.
+
+    Rebuilds every nested dict fresh (even branches `overrides` never touches), so the
+    result never aliases a mutable nested dict from either `defaults` or `overrides`.
+    """
+    result = {
+        key: (merge_settings(value, {}) if isinstance(value, dict) else value)
+        for key, value in defaults.items()
+    }
     for key, value in overrides.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = merge_settings(result[key], value)

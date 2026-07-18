@@ -13,13 +13,19 @@ from ccgen.config.defaults import (
     TransliterationDefaults,
     get_default_settings,
 )
+from ccgen.utils.model_status import (
+    neural_translit_cached,
+    translation_pair_cached,
+    whisper_cached,
+)
 
 
 class PrefsController(QObject):
     """Exposes application preferences to QML, backed by the embedded API's /settings route."""
 
-    settingsChanged = Signal()
-    themeChanged    = Signal(str)
+    settingsChanged   = Signal()
+    themeChanged      = Signal(str)
+    modelStatusChanged = Signal()
 
     def __init__(self, base_url: str, parent=None):
         super().__init__(parent)
@@ -101,6 +107,28 @@ class PrefsController(QObject):
             {"label": label, "code": code}
             for label, code in TransliterationDefaults.ENGINES
         ]
+
+    # ── Download status ──────────────────────────────────────────────────────
+
+    @Property("QVariantMap", notify=modelStatusChanged)  # type: ignore[arg-type]
+    def modelStatus(self) -> dict:
+        """Map of Whisper model name to whether it is already cached locally."""
+        return {name: whisper_cached(name) for name in ModelDefaults.SUPPORTED_MODELS}
+
+    @Slot()
+    def refreshModelStatus(self) -> None:
+        """Re-check Whisper model cache state and notify QML."""
+        self.modelStatusChanged.emit()
+
+    @Slot(str, str, result=bool)
+    def isTranslationReady(self, source: str, target: str) -> bool:
+        """Return True when an offline translation package for this pair is installed."""
+        return translation_pair_cached(source, target)
+
+    @Slot(str, str, result=bool)
+    def isNeuralReady(self, source: str, target: str) -> bool:
+        """Return True when the neural transliteration backend for this pair is cached."""
+        return neural_translit_cached(source, target)
 
     # ── Persisted settings properties ────────────────────────────────────────
 

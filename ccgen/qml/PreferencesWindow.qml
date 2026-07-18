@@ -157,6 +157,7 @@ ApplicationWindow {
                                     Layout.preferredWidth:  120
                                     Layout.preferredHeight: 34
                                     model: prefsController.modelOptions
+                                    downloadStatus: prefsController.modelStatus
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
                             }
@@ -244,6 +245,7 @@ ApplicationWindow {
                                     Layout.preferredWidth:  160
                                     Layout.preferredHeight: 34
                                     model: prefsController.targetOptions.map(o => o.label)
+                                    downloadStatus: prefsWin.targetDownloadStatus()
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
                             }
@@ -358,6 +360,7 @@ ApplicationWindow {
                                     Layout.preferredWidth:  160
                                     Layout.preferredHeight: 34
                                     model: prefsController.translitEngineOptions.map(o => o.label)
+                                    downloadStatus: prefsWin.engineDownloadStatus()
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
                             }
@@ -510,6 +513,31 @@ ApplicationWindow {
         for (var i = 0; i < options.length; i++)
             if (options[i].code === code) return i
         return fallback
+    }
+
+    // Downloaded/needs-download indicator maps, keyed by the label shown in each combo box.
+    // Source language is unknown here (no default source-language setting), so translation
+    // readiness is checked without a fixed source, same as the main window's Auto-detect case.
+    function targetDownloadStatus() {
+        var status = {}
+        var opts = prefsController.targetOptions
+        for (var i = 0; i < opts.length; i++)
+            status[opts[i].label] = prefsController.isTranslationReady("", opts[i].code)
+        return status
+    }
+
+    function engineDownloadStatus() {
+        var status = {}
+        var opts = prefsController.translitEngineOptions
+        var schemes = prefsController.translitSchemeOptions
+        var source = schemes[translitSourceCombo.currentIndex] ? schemes[translitSourceCombo.currentIndex].code : ""
+        var target = schemes[translitTargetCombo.currentIndex] ? schemes[translitTargetCombo.currentIndex].code : ""
+        for (var i = 0; i < opts.length; i++) {
+            status[opts[i].label] = opts[i].code === "neural"
+                ? prefsController.isNeuralReady(source, target)
+                : true
+        }
+        return status
     }
 
     function applyValues() {

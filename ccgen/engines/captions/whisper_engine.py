@@ -9,6 +9,7 @@ from faster_whisper import WhisperModel
 from ccgen.config.defaults import ComputeDefaults, ModelDefaults, TranscriptionDefaults
 from ccgen.core import Segment, WordToken
 from ccgen.engines.captions.base import CaptionEngine
+from ccgen.utils.download_progress import download_progress
 
 _log = logging.getLogger(__name__)
 
@@ -27,16 +28,21 @@ class WhisperEngine(CaptionEngine):
         self._compute_type = compute_type
         self._model: Optional[WhisperModel] = None
 
-    def load(self, progress_cb: Optional[Callable[[str], None]] = None) -> None:
+    def load(
+        self,
+        progress_cb: Optional[Callable[[str], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Load (and download if needed) the Whisper model into memory."""
         try:
             _log.info("Loading Whisper model '%s' on %s/%s", self._model_name, self._device, self._compute_type)
             _cb(progress_cb, f"Loading model '{self._model_name}'...")
-            self._model = WhisperModel(
-                self._model_name,
-                device=self._device,
-                compute_type=self._compute_type,
-            )
+            with download_progress(progress_num_cb):
+                self._model = WhisperModel(
+                    self._model_name,
+                    device=self._device,
+                    compute_type=self._compute_type,
+                )
             _cb(progress_cb, "Model ready.")
             _log.info("Whisper model ready: %s", self._model_name)
         except Exception as e:
@@ -51,6 +57,7 @@ class WhisperEngine(CaptionEngine):
         vad_filter: bool = TranscriptionDefaults.VAD_FILTER,
         progress_cb: Optional[Callable[[str], None]] = None,
         segment_cb: Optional[Callable[["Segment"], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[Segment]:
         """Transcribe an audio file and return a list of word-timestamped segments.
 
@@ -63,7 +70,9 @@ class WhisperEngine(CaptionEngine):
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             _log.info("Transcribing: %s (lang=%s, beam=%d, vad=%s)", os.path.basename(audio_path), language, beam_size, vad_filter)
             segments = list(
-                self._iter_segments(audio_path, language, beam_size, vad_filter, progress_cb, segment_cb)
+                self._iter_segments(
+                    audio_path, language, beam_size, vad_filter, progress_cb, segment_cb, progress_num_cb
+                )
             )
             _log.info("Transcription complete: %d segments", len(segments))
             return segments
@@ -92,6 +101,7 @@ class WhisperEngine(CaptionEngine):
         vad_filter: bool,
         progress_cb: Optional[Callable[[str], None]],
         segment_cb: Optional[Callable[["Segment"], None]] = None,
+        progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> Iterator[Segment]:
         """Iterate faster-whisper output, yield typed Segment dicts, and fire segment_cb per segment."""
         vad_params = {"min_silence_duration_ms": TranscriptionDefaults.VAD_MIN_SILENCE_MS}
@@ -104,8 +114,10 @@ class WhisperEngine(CaptionEngine):
             vad_parameters=vad_params,
         )
         detected = info.language if language is None else language
+        duration_ms = int(info.duration * 1000)
         for idx, seg in enumerate(segments):
             _cb(progress_cb, f"Segment {idx + 1}: [{seg.start:.1f}s → {seg.end:.1f}s]")
+            _num_cb(progress_num_cb, int(seg.end * 1000), duration_ms)
             words: list[WordToken] = []
             if seg.words:
                 words = [
@@ -133,5 +145,14 @@ def _cb(fn: Optional[Callable[[str], None]], msg: str) -> None:
     try:
         if fn:
             fn(msg)
+    except Exception:
+        pass
+
+
+def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+    """Call a numeric progress callback safely when present."""
+    try:
+        if fn:
+            fn(done, total)
     except Exception:
         pass
