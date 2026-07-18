@@ -40,7 +40,7 @@ class TestRuleEngine:
     def test_ur_to_roman_matches_user_example(self):
         engine = RuleEngine(source_scheme="ur", target_scheme="roman")
         result = engine.transliterate_segments([
-            {"id": 0, "start": 0.0, "end": 1.0, "text": "کیا حال ہے پیارے؟"},
+            {"id": 0, "start": 0.0, "end": 1.0, "text": "کیا حال ہے پیارے؟", "words": [], "language": "ur"},
         ])
         assert result[0]["transliterated"] == "kya haal hai piyare?"
         assert result[0]["source_scheme"] == "ur"
@@ -49,28 +49,30 @@ class TestRuleEngine:
     def test_ur_to_roman_never_leaves_arabic_script(self):
         engine = RuleEngine(source_scheme="ur", target_scheme="roman")
         result = engine.transliterate_segments([
-            {"id": 0, "start": 0.0, "end": 1.0, "text": "زندگی میں بہت کام ہے"},
+            {"id": 0, "start": 0.0, "end": 1.0, "text": "زندگی میں بہت کام ہے", "words": [], "language": "ur"},
         ])
         assert not _ARABIC_RANGE.search(result[0]["transliterated"])
 
     def test_hi_to_ur_strips_diacritics(self):
         engine = RuleEngine(source_scheme="hi", target_scheme="ur")
         result = engine.transliterate_segments([
-            {"id": 0, "start": 0.0, "end": 1.0, "text": "तुम कैसे हो"},
+            {"id": 0, "start": 0.0, "end": 1.0, "text": "तुम कैसे हो", "words": [], "language": "hi"},
         ])
         assert not re.search(r"[ً-ْ]", result[0]["transliterated"])
 
     def test_transliterates_translated_segment_text(self):
         engine = RuleEngine(source_scheme="ur", target_scheme="roman")
         result = engine.transliterate_segments([
-            {"id": 0, "start": 0.0, "end": 1.0, "original": "hi", "translated": "ہاں"},
+            {"id": 0, "start": 0.0, "end": 1.0, "original": "hi", "translated": "ہاں", "language": "ur"},
         ])
         assert result[0]["transliterated"] == "haan"
 
     def test_unknown_scheme_raises(self):
         engine = RuleEngine(source_scheme="xx", target_scheme="ur")
         with pytest.raises(RuntimeError):
-            engine.transliterate_segments([{"id": 0, "start": 0.0, "end": 1.0, "text": "a"}])
+            engine.transliterate_segments([
+                {"id": 0, "start": 0.0, "end": 1.0, "text": "a", "words": [], "language": "xx"},
+            ])
 
 
 class TestNeuralEngine:
@@ -96,7 +98,7 @@ class TestNeuralEngine:
                 return_value=mock_model,
             ):
                 result = engine.transliterate_segments([
-                    {"id": 0, "start": 0.0, "end": 1.0, "text": "کیا حال ہے"},
+                    {"id": 0, "start": 0.0, "end": 1.0, "text": "کیا حال ہے", "words": [], "language": "ur"},
                 ])
 
         assert result[0]["transliterated"] == "kya haal hai"
@@ -108,7 +110,7 @@ class TestNeuralEngine:
         with patch.object(engine._rekhta, "load") as mock_load:
             with patch.object(engine._rekhta, "convert", return_value="تم کیسے ہو") as mock_convert:
                 result = engine.transliterate_segments([
-                    {"id": 0, "start": 0.0, "end": 1.0, "text": "तुम कैसे हो"},
+                    {"id": 0, "start": 0.0, "end": 1.0, "text": "तुम कैसे हो", "words": [], "language": "hi"},
                 ])
         mock_load.assert_called_once()
         mock_convert.assert_called_once_with("तुम कैसे हो")
@@ -117,7 +119,9 @@ class TestNeuralEngine:
     def test_unsupported_pair_raises(self):
         engine = NeuralEngine(source_scheme="bn", target_scheme="roman")
         with pytest.raises(RuntimeError):
-            engine.transliterate_segments([{"id": 0, "start": 0.0, "end": 1.0, "text": "a"}])
+            engine.transliterate_segments([
+                {"id": 0, "start": 0.0, "end": 1.0, "text": "a", "words": [], "language": "bn"},
+            ])
 
 
 class TestRegistry:
