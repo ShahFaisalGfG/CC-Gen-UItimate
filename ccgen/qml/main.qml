@@ -26,6 +26,11 @@ ApplicationWindow {
         y = Screen.virtualY + Math.round((Screen.desktopAvailableHeight - height) / 2)
     }
 
+    // quitOnLastWindowClosed is disabled app-wide (see app.py) since it can
+    // misfire while a QML window is still open, so closing the main window
+    // must quit explicitly.
+    onClosing: Qt.quit()
+
     // Live segment model — QML-side ListModel populated by worker signals
     ListModel { id: segmentModel }
 
