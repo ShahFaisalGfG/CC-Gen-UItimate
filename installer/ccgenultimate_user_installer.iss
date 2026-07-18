@@ -25,7 +25,7 @@
 #define IconsDir "..\ccgen\assets\icons"
 
 [Setup]
-AppId={{C4E9A1B6-5D72-4E8F-A21C-3B7F6D5A0912}
+AppId={{7BFA27A3-AF1F-45DD-9F5F-CBCF2A9CEB81}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName}
@@ -67,8 +67,12 @@ Name: "contextmenu"; Description: "{cm:EnableContextMenu}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Shell extension DLL - restartreplace schedules replacement on reboot if Explorer holds a lock
-Source: "{#SourceDir}\ccgen_shell.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
+; Shell extension DLL - no restartreplace/uninsrestartdelete here: those need
+; MOVEFILE_DELAY_UNTIL_REBOOT, which Windows restricts to admin processes, and
+; this is the no-admin user installer. If Explorer has the DLL locked at
+; uninstall time it's simply left behind as a harmless orphan (its registry
+; entries are already removed via uninsdeletekey).
+Source: "{#SourceDir}\ccgen_shell.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#IconsDir}\CCGenUltimate.ico"; DestDir: "{app}\icons"; Flags: ignoreversion
 Source: "..\requirements.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "{#IconsDir}\Square150x150Logo.scale-100.png"; DestDir: "{app}\docs\icons"; Flags: ignoreversion
