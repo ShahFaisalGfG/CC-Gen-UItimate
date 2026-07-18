@@ -37,6 +37,9 @@ class _Startup:
         self._input_paths = [p for p in sys.argv[1:] if os.path.isfile(p)]
         self._engine: Optional[QQmlApplicationEngine] = None
         self._api_server = None
+        self._app_ctrl = None
+        self._trans_ctrl = None
+        self._prefs_ctrl = None
 
         self._splash = SplashScreen(resource_path("ccgen/assets/icons/Square310x310Logo.scale-100.png"))
         self._splash.show()
@@ -82,7 +85,13 @@ class _Startup:
                 self._on_failed("The user interface failed to load.")
                 return
 
-            self._engine = engine  # kept alive for the app's lifetime
+            # Kept alive for the app's lifetime - QML's context properties hold
+            # only a weak reference, so a garbage-collected controller here
+            # would leave bound QML text empty.
+            self._engine = engine
+            self._app_ctrl = app_ctrl
+            self._trans_ctrl = trans_ctrl
+            self._prefs_ctrl = prefs_ctrl
             root = engine.rootObjects()[0]
             self._splash.close()
             if isinstance(root, QQuickWindow):
@@ -103,9 +112,12 @@ class _Startup:
         self._app.exit(-1)
 
     def shutdown(self) -> None:
-        """Tear down the QML scene before stopping the embedded server."""
+        """Tear down the QML scene and controllers, then stop the API server."""
         try:
             self._engine = None
+            self._app_ctrl = None
+            self._trans_ctrl = None
+            self._prefs_ctrl = None
             if self._api_server is not None:
                 self._api_server.stop()
         except Exception:
