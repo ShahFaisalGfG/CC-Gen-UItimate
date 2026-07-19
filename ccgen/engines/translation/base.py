@@ -23,6 +23,7 @@ class TranslationEngine(ABC):
         segments: list[Segment],
         progress_cb: Optional[Callable[[str], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[TranslatedSegment], None]] = None,
     ) -> list[TranslatedSegment]:
         """Translate a segment list, preserving all timing from the source."""
 

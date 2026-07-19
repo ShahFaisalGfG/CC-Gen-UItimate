@@ -158,6 +158,22 @@ class TestRunHappyPath:
         assert len(result.output_files) == 2
         assert all(os.path.exists(p) for p in result.output_files)
 
+    def test_writes_all_five_formats_when_all_enabled(self, tmp_path, mock_env, sample_segments):
+        input_path = str(tmp_path / "movie.mp4")
+        mock_env["extract_audio"].return_value = str(tmp_path / "audio.wav")
+        mock_env["transcriber"].transcribe.return_value = sample_segments
+
+        config = _make_config(
+            input_path=input_path,
+            emit_srt=True, emit_vtt=True, emit_lrc=True, emit_ass=True, emit_sbv=True,
+        )
+        result = Pipeline(config).run()
+
+        assert len(result.output_files) == 5
+        assert all(os.path.exists(p) for p in result.output_files)
+        exts = {os.path.splitext(p)[1] for p in result.output_files}
+        assert exts == {".srt", ".vtt", ".lrc", ".ass", ".sbv"}
+
     def test_output_written_even_when_no_segments(self, tmp_path, mock_env):
         input_path = str(tmp_path / "movie.mp4")
         mock_env["extract_audio"].return_value = str(tmp_path / "audio.wav")
@@ -271,7 +287,7 @@ class TestRunTranslation:
 
         mock_env["translator"].set_pair.assert_called_once_with("en", "es")
         mock_env["translator"].ensure_model.assert_called_once_with(None, None)
-        mock_env["translator"].translate_segments.assert_called_once_with(sample_segments, None, None)
+        mock_env["translator"].translate_segments.assert_called_once_with(sample_segments, None, None, None)
         assert result.translated_segments == sample_translated_segments
 
     def test_resolves_auto_source_from_detected_language(self, tmp_path, mock_env, sample_segments, sample_translated_segments):
@@ -298,6 +314,22 @@ class TestRunTranslation:
         assert "Translation step failed" in result.error
         assert "engine exploded" in result.error
         mock_env["cleanup_temp"].assert_called_once()
+
+    def test_segment_cb_forwarded_to_translate_segments(
+        self, tmp_path, mock_env, sample_segments, sample_translated_segments
+    ):
+        input_path = str(tmp_path / "movie.mp4")
+        mock_env["extract_audio"].return_value = str(tmp_path / "audio.wav")
+        mock_env["transcriber"].transcribe.return_value = sample_segments
+        mock_env["translator"].translate_segments.return_value = sample_translated_segments
+        segment_cb = MagicMock()
+
+        config = _make_config(input_path=input_path, translate=True, source_lang="en", target_lang="es")
+        Pipeline(config).run(segment_cb=segment_cb)
+
+        mock_env["translator"].translate_segments.assert_called_once_with(
+            sample_segments, None, None, segment_cb
+        )
 
     def test_missing_source_lang_for_subtitle_input_fails(self, tmp_path, mock_env, sample_segments):
         config = _make_config(
@@ -330,7 +362,9 @@ class TestRunTransliteration:
 
         Pipeline(_make_config(input_path=input_path, transliterate=True)).run()
 
-        mock_env["transliterator"].transliterate_segments.assert_called_once_with(sample_segments, None, None)
+        mock_env["transliterator"].transliterate_segments.assert_called_once_with(
+            sample_segments, None, None, None
+        )
 
     def test_uses_translated_segments_when_configured(self, tmp_path, mock_env, sample_segments, sample_translated_segments):
         input_path = str(tmp_path / "movie.mp4")
@@ -347,7 +381,7 @@ class TestRunTransliteration:
         Pipeline(config).run()
 
         mock_env["transliterator"].transliterate_segments.assert_called_once_with(
-            sample_translated_segments, None, None
+            sample_translated_segments, None, None, None
         )
 
     def test_falls_back_to_transcription_when_translation_empty(self, tmp_path, mock_env, sample_segments):
@@ -359,7 +393,9 @@ class TestRunTransliteration:
         config = _make_config(input_path=input_path, transliterate=True, translit_input="translation")
         Pipeline(config).run()
 
-        mock_env["transliterator"].transliterate_segments.assert_called_once_with(sample_segments, None, None)
+        mock_env["transliterator"].transliterate_segments.assert_called_once_with(
+            sample_segments, None, None, None
+        )
 
     def test_engine_failure_yields_error_result(self, tmp_path, mock_env, sample_segments):
         input_path = str(tmp_path / "movie.mp4")
@@ -371,6 +407,20 @@ class TestRunTransliteration:
 
         assert result.success is False
         assert "Transliteration step failed" in result.error
+
+    def test_segment_cb_forwarded_to_transliterate_segments(self, tmp_path, mock_env, sample_segments):
+        input_path = str(tmp_path / "movie.mp4")
+        mock_env["extract_audio"].return_value = str(tmp_path / "audio.wav")
+        mock_env["transcriber"].transcribe.return_value = sample_segments
+        mock_env["transliterator"].transliterate_segments.return_value = []
+        segment_cb = MagicMock()
+
+        config = _make_config(input_path=input_path, transliterate=True)
+        Pipeline(config).run(segment_cb=segment_cb)
+
+        mock_env["transliterator"].transliterate_segments.assert_called_once_with(
+            sample_segments, None, None, segment_cb
+        )
 
     def test_output_file_naming_includes_schemes(self, tmp_path, mock_env, sample_segments):
         input_path = str(tmp_path / "movie.mp4")
@@ -512,7 +562,9 @@ class TestProgressNumCbForwarding:
         Pipeline(config).run(progress_num_cb=progress_num_cb)
 
         mock_env["translator"].ensure_model.assert_called_once_with(None, progress_num_cb)
-        mock_env["translator"].translate_segments.assert_called_once_with(sample_segments, None, progress_num_cb)
+        mock_env["translator"].translate_segments.assert_called_once_with(
+            sample_segments, None, progress_num_cb, None
+        )
 
     def test_forwarded_to_transliterate(self, tmp_path, mock_env, sample_segments):
         input_path = str(tmp_path / "movie.mp4")
@@ -525,5 +577,5 @@ class TestProgressNumCbForwarding:
         Pipeline(config).run(progress_num_cb=progress_num_cb)
 
         mock_env["transliterator"].transliterate_segments.assert_called_once_with(
-            sample_segments, None, progress_num_cb
+            sample_segments, None, progress_num_cb, None
         )

@@ -10,7 +10,7 @@ import logging
 import uuid
 from typing import Any, AsyncIterator, Optional
 
-from ccgen.core import Segment
+from ccgen.core import AnySegment
 from ccgen.core.pipeline import Pipeline, PipelineConfig, PipelineResult
 
 _log = logging.getLogger(__name__)
@@ -80,10 +80,16 @@ class JobManager:
         def status_cb(message: str) -> None:
             emit({"event": "status", "message": message})
 
-        def segment_cb(seg: Segment) -> None:
+        def segment_cb(seg: AnySegment) -> None:
+            text = (
+                seg.get("transliterated")  # type: ignore[typeddict-item]
+                or seg.get("translated")  # type: ignore[typeddict-item]
+                or seg.get("text")  # type: ignore[typeddict-item]
+                or ""
+            )
             emit({
                 "event": "segment",
-                "id": seg["id"], "start": seg["start"], "end": seg["end"], "text": seg["text"],
+                "id": seg["id"], "start": seg["start"], "end": seg["end"], "text": text,
             })
 
         def progress_num_cb(done: int, total: int) -> None:

@@ -29,7 +29,7 @@ Rectangle {
         return v.indexOf(fileItem.fileExt) >= 0
     }
     readonly property bool _isSubtitle: {
-        var s = ["SRT","VTT","ASS","SSA"]
+        var s = ["SRT","VTT","ASS","SSA","LRC","SBV"]
         return s.indexOf(fileItem.fileExt) >= 0
     }
 

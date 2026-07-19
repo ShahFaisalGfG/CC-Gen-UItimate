@@ -158,6 +158,132 @@ class TestParseVtt:
             parse_subtitle(str(tmp_path / "missing.vtt"))
 
 
+class TestParseSbv:
+    SBV_CONTENT = (
+        "0:00:00.000,0:00:02.500\n"
+        "Hello world.\n"
+        "\n"
+        "0:00:03.000,0:00:05.750\n"
+        "This is a test.\n"
+    )
+
+    def test_parses_all_blocks(self, tmp_path):
+        path = _write(tmp_path, "sample.sbv", self.SBV_CONTENT)
+        segments = parse_subtitle(path)
+        assert len(segments) == 2
+
+    def test_first_block_fields(self, tmp_path):
+        path = _write(tmp_path, "sample.sbv", self.SBV_CONTENT)
+        segments = parse_subtitle(path)
+        first = segments[0]
+        assert first["start"] == 0.0
+        assert first["end"] == 2.5
+        assert first["text"] == "Hello world."
+
+    def test_multiline_body_joined_with_space(self, tmp_path):
+        content = "0:00:00.000,0:00:02.000\nLine one\nLine two\n"
+        path = _write(tmp_path, "multi.sbv", content)
+        segments = parse_subtitle(path)
+        assert segments[0]["text"] == "Line one Line two"
+
+    def test_empty_file_returns_no_segments(self, tmp_path):
+        path = _write(tmp_path, "empty.sbv", "")
+        assert parse_subtitle(path) == []
+
+
+class TestParseLrc:
+    LRC_CONTENT = (
+        "[00:00.00]Hello world.\n"
+        "[00:03.00]This is a test.\n"
+    )
+
+    def test_parses_all_lines(self, tmp_path):
+        path = _write(tmp_path, "sample.lrc", self.LRC_CONTENT)
+        segments = parse_subtitle(path)
+        assert len(segments) == 2
+
+    def test_first_line_fields(self, tmp_path):
+        path = _write(tmp_path, "sample.lrc", self.LRC_CONTENT)
+        segments = parse_subtitle(path)
+        first = segments[0]
+        assert first["start"] == 0.0
+        assert first["text"] == "Hello world."
+
+    def test_end_time_derived_from_next_line_start(self, tmp_path):
+        path = _write(tmp_path, "sample.lrc", self.LRC_CONTENT)
+        segments = parse_subtitle(path)
+        assert segments[0]["end"] == 3.0
+
+    def test_last_line_gets_fallback_duration(self, tmp_path):
+        path = _write(tmp_path, "sample.lrc", self.LRC_CONTENT)
+        segments = parse_subtitle(path)
+        assert segments[1]["end"] == segments[1]["start"] + 4.0
+
+    def test_blank_text_timestamp_is_skipped(self, tmp_path):
+        content = "[00:00.00]\n[00:03.00]Real lyric.\n"
+        path = _write(tmp_path, "instrumental.lrc", content)
+        segments = parse_subtitle(path)
+        assert len(segments) == 1
+        assert segments[0]["text"] == "Real lyric."
+
+    def test_empty_file_returns_no_segments(self, tmp_path):
+        path = _write(tmp_path, "empty.lrc", "")
+        assert parse_subtitle(path) == []
+
+
+class TestParseAss:
+    ASS_CONTENT = (
+        "[Script Info]\n"
+        "Title: Test\n"
+        "\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname\n"
+        "Style: Default,Arial\n"
+        "\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: 0,0:00:00.00,0:00:02.50,Default,,0,0,0,,Hello world.\n"
+        "Dialogue: 0,0:00:03.00,0:00:05.75,Default,,0,0,0,,Line one\\NLine two\n"
+    )
+
+    def test_parses_all_dialogue_lines(self, tmp_path):
+        path = _write(tmp_path, "sample.ass", self.ASS_CONTENT)
+        segments = parse_subtitle(path)
+        assert len(segments) == 2
+
+    def test_first_dialogue_fields(self, tmp_path):
+        path = _write(tmp_path, "sample.ass", self.ASS_CONTENT)
+        segments = parse_subtitle(path)
+        first = segments[0]
+        assert first["start"] == 0.0
+        assert first["end"] == 2.5
+        assert first["text"] == "Hello world."
+
+    def test_forced_line_break_becomes_space(self, tmp_path):
+        path = _write(tmp_path, "sample.ass", self.ASS_CONTENT)
+        segments = parse_subtitle(path)
+        assert segments[1]["text"] == "Line one Line two"
+
+    def test_override_tags_stripped(self, tmp_path):
+        content = (
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,{\\an8}Styled text.\n"
+        )
+        path = _write(tmp_path, "styled.ass", content)
+        segments = parse_subtitle(path)
+        assert segments[0]["text"] == "Styled text."
+
+    def test_ssa_extension_uses_same_parser(self, tmp_path):
+        path = _write(tmp_path, "sample.ssa", self.ASS_CONTENT)
+        segments = parse_subtitle(path)
+        assert len(segments) == 2
+
+    def test_empty_file_returns_no_segments(self, tmp_path):
+        path = _write(tmp_path, "empty.ass", "[Script Info]\n")
+        assert parse_subtitle(path) == []
+
+
 class TestParseSubtitleErrors:
     def test_unsupported_extension_raises_value_error(self, tmp_path):
         path = _write(tmp_path, "captions.txt", SRT_CONTENT)
@@ -177,6 +303,18 @@ class TestIsSubtitle:
 
     def test_mixed_case_extension_true(self):
         assert is_subtitle("/videos/movie.Vtt") is True
+
+    def test_lrc_extension_true(self):
+        assert is_subtitle("/videos/movie.lrc") is True
+
+    def test_ass_extension_true(self):
+        assert is_subtitle("/videos/movie.ass") is True
+
+    def test_ssa_extension_true(self):
+        assert is_subtitle("/videos/movie.ssa") is True
+
+    def test_sbv_extension_true(self):
+        assert is_subtitle("/videos/movie.sbv") is True
 
     def test_video_extension_false(self):
         assert is_subtitle("/videos/movie.mp4") is False

@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import subprocess
 import tempfile
 from typing import Optional
 
@@ -64,22 +65,28 @@ def _make_temp_wav() -> str:
 def _run_ffmpeg(input_path: str, output_path: str) -> None:
     """Execute ffmpeg to convert input to 16 kHz mono PCM WAV.
 
-    Wraps ffmpeg.Error into RuntimeError with the original stderr message.
+    Runs without a visible console window; wraps a non-zero exit into RuntimeError.
     """
-    try:
-        (
-            ffmpeg
-            .input(input_path)
-            .output(
-                output_path,
-                ar=AudioDefaults.SAMPLE_RATE,
-                ac=AudioDefaults.CHANNELS,
-                format=AudioDefaults.AUDIO_FORMAT,
-                acodec="pcm_s16le",
-            )
-            .overwrite_output()
-            .run(quiet=True)
+    args = (
+        ffmpeg
+        .input(input_path)
+        .output(
+            output_path,
+            ar=AudioDefaults.SAMPLE_RATE,
+            ac=AudioDefaults.CHANNELS,
+            format=AudioDefaults.AUDIO_FORMAT,
+            acodec="pcm_s16le",
         )
-    except ffmpeg.Error as e:
+        .overwrite_output()
+        .compile()
+    )
+    try:
+        subprocess.run(
+            args,
+            capture_output=True,
+            check=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else str(e)
         raise RuntimeError(f"ffmpeg error: {stderr}") from e

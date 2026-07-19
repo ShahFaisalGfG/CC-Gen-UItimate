@@ -18,7 +18,7 @@ import torch
 from huggingface_hub import hf_hub_download
 from torch import nn
 
-from ccgen.utils.download_progress import download_progress
+from ccgen.utils.download_progress import download_progress, retry_hf_load
 
 _log = logging.getLogger(__name__)
 
@@ -100,12 +100,7 @@ class RekhtaBackend:
         Raises RuntimeError when the download or checkpoint load fails.
         """
         try:
-            _cb(progress_cb, "Downloading Hindi→Urdu transliteration model...")
-            with download_progress(progress_num_cb):
-                checkpoint_path = hf_hub_download(_REPO_ID, _CHECKPOINT_FILE)
-                src_tok_path = hf_hub_download(_REPO_ID, _SRC_TOKENIZER_FILE)
-                tgt_tok_path = hf_hub_download(_REPO_ID, _TGT_TOKENIZER_FILE)
-
+            checkpoint_path, src_tok_path, tgt_tok_path = self._resolve_paths(progress_cb, progress_num_cb)
             self._src_sp = spm.SentencePieceProcessor(model_file=src_tok_path)  # type: ignore[reportCallIssue]
             self._tgt_sp = spm.SentencePieceProcessor(model_file=tgt_tok_path)  # type: ignore[reportCallIssue]
             self._model = _CharTransformer(
@@ -123,6 +118,27 @@ class RekhtaBackend:
         except Exception as e:
             _log.error("Rekhta model load failed: %r", e, exc_info=True)
             raise RuntimeError(f"Hindi→Urdu model load failed: {e}") from e
+
+    def _resolve_paths(
+        self,
+        progress_cb: Optional[Callable[[str], None]],
+        progress_num_cb: Optional[Callable[[int, int], None]],
+    ) -> tuple[str, str, str]:
+        """Return cached checkpoint/tokenizer paths, downloading them over the network on first use."""
+        try:
+            return (
+                hf_hub_download(_REPO_ID, _CHECKPOINT_FILE, local_files_only=True),
+                hf_hub_download(_REPO_ID, _SRC_TOKENIZER_FILE, local_files_only=True),
+                hf_hub_download(_REPO_ID, _TGT_TOKENIZER_FILE, local_files_only=True),
+            )
+        except OSError:
+            _cb(progress_cb, "Downloading Hindi→Urdu transliteration model...")
+            with download_progress(progress_num_cb):
+                return (
+                    retry_hf_load(lambda: hf_hub_download(_REPO_ID, _CHECKPOINT_FILE)),
+                    retry_hf_load(lambda: hf_hub_download(_REPO_ID, _SRC_TOKENIZER_FILE)),
+                    retry_hf_load(lambda: hf_hub_download(_REPO_ID, _TGT_TOKENIZER_FILE)),
+                )
 
     def convert(self, text: str) -> str:
         """Transliterate one string of Devanagari text into Urdu (Nastaliq) script.

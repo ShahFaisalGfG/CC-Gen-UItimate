@@ -2,6 +2,7 @@
 # so the settings UI can show a downloaded vs needs-download indicator without any network call.
 
 import logging
+from pathlib import Path
 
 import argostranslate.package
 from huggingface_hub import scan_cache_dir
@@ -59,10 +60,19 @@ def translation_pair_cached(source: str, target: str) -> bool:
 
 
 def _repo_cached(repo_id: str) -> bool:
-    """Return True when any revision of `repo_id` is present in the local Hugging Face cache."""
+    """Return True when `repo_id` is fully present in the local Hugging Face cache.
+
+    A repo interrupted mid-download (app crash, force-close) leaves its small metadata
+    files resolved but its large weight file as a stray `.incomplete` blob with no
+    snapshot symlink - scan_cache_dir() still lists that repo, so completeness also
+    requires no leftover `.incomplete` blob anywhere under it.
+    """
     try:
         cache_info = scan_cache_dir()
-        return any(repo.repo_id == repo_id for repo in cache_info.repos)
+        for repo in cache_info.repos:
+            if repo.repo_id == repo_id:
+                return not any(Path(repo.repo_path, "blobs").glob("*.incomplete"))
+        return False
     except Exception:
         _log.debug("Failed to scan Hugging Face cache", exc_info=True)
         return False

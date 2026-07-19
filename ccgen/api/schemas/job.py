@@ -28,6 +28,9 @@ class JobConfig(BaseModel):
     target_lang: str = TranslationDefaults.DEFAULT_TARGET_LANG
     emit_srt: bool = OutputDefaults.FORMAT_SRT
     emit_vtt: bool = OutputDefaults.FORMAT_VTT
+    emit_lrc: bool = OutputDefaults.FORMAT_LRC
+    emit_ass: bool = OutputDefaults.FORMAT_ASS
+    emit_sbv: bool = OutputDefaults.FORMAT_SBV
     beam_size: int = TranscriptionDefaults.BEAM_SIZE
     vad_filter: bool = TranscriptionDefaults.VAD_FILTER
     transliterate: bool = TransliterationDefaults.ENABLED

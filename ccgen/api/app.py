@@ -6,15 +6,16 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
-from ccgen.api.routers import jobs, options, settings
+from ccgen.api.routers import assets, jobs, options, settings
 
 _log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Log startup and shutdown of the embedded API server."""
+    """Log startup/shutdown and reset event-loop-bound singletons for this app lifecycle."""
     _log.info("CC-Gen-Ultimate API starting")
+    assets.reset_manager()
     yield
     _log.info("CC-Gen-Ultimate API stopping")
 
@@ -29,6 +30,7 @@ app = FastAPI(
 app.include_router(settings.router)
 app.include_router(options.router)
 app.include_router(jobs.router)
+app.include_router(assets.router)
 
 
 @app.get("/health")

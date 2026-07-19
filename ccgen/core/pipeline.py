@@ -6,9 +6,17 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from ccgen.config.defaults import OutputDefaults, TranslationDefaults, TransliterationDefaults
-from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
+from ccgen.core import AnySegment, Segment, TranslatedSegment, TransliteratedSegment
 from ccgen.core.audio import cleanup_temp, extract_audio
-from ccgen.core.subtitle import derive_output_path, write_srt, write_vtt
+from ccgen.core.subtitle import (
+    SubtitleSource,
+    derive_output_path,
+    write_ass,
+    write_lrc,
+    write_sbv,
+    write_srt,
+    write_vtt,
+)
 from ccgen.core.subtitle_parser import is_subtitle, parse_subtitle
 from ccgen.engines.captions import create_engine as create_caption_engine
 from ccgen.engines.captions.base import CaptionEngine
@@ -35,6 +43,9 @@ class PipelineConfig:
     target_lang: str = TranslationDefaults.DEFAULT_TARGET_LANG
     emit_srt: bool = OutputDefaults.FORMAT_SRT
     emit_vtt: bool = OutputDefaults.FORMAT_VTT
+    emit_lrc: bool = OutputDefaults.FORMAT_LRC
+    emit_ass: bool = OutputDefaults.FORMAT_ASS
+    emit_sbv: bool = OutputDefaults.FORMAT_SBV
     beam_size: int = 5
     vad_filter: bool = True
     transliterate: bool = False
@@ -110,7 +121,7 @@ class Pipeline:
     def run(
         self,
         progress_cb: Optional[Callable[[str], None]] = None,
-        segment_cb: Optional[Callable[[Segment], None]] = None,
+        segment_cb: Optional[Callable[[AnySegment], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> PipelineResult:
         """Execute the full pipeline. Never raises — returns PipelineResult on both success and failure."""
@@ -134,8 +145,12 @@ class Pipeline:
                 )
                 detected_lang = segments[0]["language"] if segments else ""
 
-            translated_segs = self._translate(segments, detected_lang, progress_cb, progress_num_cb)
-            translit_segs = self._transliterate(segments, translated_segs, progress_cb, progress_num_cb)
+            translated_segs = self._translate(
+                segments, detected_lang, progress_cb, progress_num_cb, segment_cb
+            )
+            translit_segs = self._transliterate(
+                segments, translated_segs, progress_cb, progress_num_cb, segment_cb
+            )
             output_files = self._write_outputs(segments, translated_segs, translit_segs, progress_cb)
 
             _cb(progress_cb, "Done.")
@@ -183,6 +198,7 @@ class Pipeline:
         detected_lang: str,
         progress_cb: Optional[Callable[[str], None]],
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[AnySegment], None]] = None,
     ) -> list[TranslatedSegment]:
         """Run translation when enabled; resolves 'auto' source language."""
         if self._translator is None or not segments:
@@ -198,7 +214,7 @@ class Pipeline:
             _log.debug("Translating %d segments: %s → %s", len(segments), src, self._config.target_lang)
             self._translator.set_pair(src, self._config.target_lang)
             self._translator.ensure_model(progress_cb, progress_num_cb)
-            return self._translator.translate_segments(segments, progress_cb, progress_num_cb)
+            return self._translator.translate_segments(segments, progress_cb, progress_num_cb, segment_cb)
         except Exception as e:
             _log.error("Translation step failed: %r", e, exc_info=True)
             raise RuntimeError(f"Translation step failed: {e}") from e
@@ -209,6 +225,7 @@ class Pipeline:
         translated: list[TranslatedSegment],
         progress_cb: Optional[Callable[[str], None]],
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[AnySegment], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Run transliteration when enabled; picks input from transcription or translation."""
         if self._transliterator is None:
@@ -219,7 +236,9 @@ class Pipeline:
                 translated if self._config.translit_input == "translation" and translated
                 else segments
             )
-            return self._transliterator.transliterate_segments(source_segs, progress_cb, progress_num_cb)
+            return self._transliterator.transliterate_segments(
+                source_segs, progress_cb, progress_num_cb, segment_cb
+            )
         except Exception as e:
             _log.error("Transliteration step failed: %r", e, exc_info=True)
             raise RuntimeError(f"Transliteration step failed: {e}") from e
@@ -235,45 +254,48 @@ class Pipeline:
         out: list[str] = []
         src = self._config.input_path
         tl_lang = self._config.target_lang
+        formats = self._enabled_formats()
 
         if not self._subtitle_input:
-            if self._config.emit_srt:
-                path = self._out_path(src, "", ".srt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_srt(segments, path, translated=False)
-                out.append(path)
-            if self._config.emit_vtt:
-                path = self._out_path(src, "", ".vtt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_vtt(segments, path, translated=False)
-                out.append(path)
+            out += self._write_flavor(segments, False, src, "", formats, progress_cb)
 
         if translated:
-            if self._config.emit_srt:
-                path = self._out_path(src, f"_{tl_lang}", ".srt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_srt(translated, path, translated=True)
-                out.append(path)
-            if self._config.emit_vtt:
-                path = self._out_path(src, f"_{tl_lang}", ".vtt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_vtt(translated, path, translated=True)
-                out.append(path)
+            out += self._write_flavor(translated, True, src, f"_{tl_lang}", formats, progress_cb)
 
         if transliterated:
             tr_suffix = f"_tr_{self._config.translit_source}_{self._config.translit_target}"
-            if self._config.emit_srt:
-                path = self._out_path(src, tr_suffix, ".srt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_srt(transliterated, path, translated=True)
-                out.append(path)
-            if self._config.emit_vtt:
-                path = self._out_path(src, tr_suffix, ".vtt")
-                _cb(progress_cb, f"Writing {os.path.basename(path)}...")
-                write_vtt(transliterated, path, translated=True)
-                out.append(path)
+            out += self._write_flavor(transliterated, True, src, tr_suffix, formats, progress_cb)
 
         return out
+
+    def _enabled_formats(self) -> list[tuple[str, Callable[..., str]]]:
+        """Return (extension, writer) pairs for every subtitle format enabled in this config."""
+        candidates = [
+            (".srt", self._config.emit_srt, write_srt),
+            (".vtt", self._config.emit_vtt, write_vtt),
+            (".lrc", self._config.emit_lrc, write_lrc),
+            (".ass", self._config.emit_ass, write_ass),
+            (".sbv", self._config.emit_sbv, write_sbv),
+        ]
+        return [(ext, writer) for ext, enabled, writer in candidates if enabled]
+
+    def _write_flavor(
+        self,
+        segments: SubtitleSource,
+        translated_flag: bool,
+        src: str,
+        suffix: str,
+        formats: list[tuple[str, Callable[..., str]]],
+        progress_cb: Optional[Callable[[str], None]],
+    ) -> list[str]:
+        """Write every enabled format for one segment flavor (original/translated/transliterated)."""
+        written: list[str] = []
+        for ext, writer in formats:
+            path = self._out_path(src, suffix, ext)
+            _cb(progress_cb, f"Writing {os.path.basename(path)}...")
+            writer(segments, path, translated=translated_flag)
+            written.append(path)
+        return written
 
     def _out_path(self, input_path: str, suffix: str, ext: str) -> str:
         """Build an output file path, relocating to output_dir when set."""

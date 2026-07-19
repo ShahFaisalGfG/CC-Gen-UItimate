@@ -186,6 +186,26 @@ Root: HKCR; Subkey: "SystemFileAssociations\.vtt\shell\CCGenUltimateSubtitles"; 
 Root: HKCR; Subkey: "SystemFileAssociations\.vtt\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.vtt\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
 
+Root: HKCR; Subkey: "SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCR; Subkey: "SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCR; Subkey: "SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCR; Subkey: "SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
 ; =============================================================================
 ; Optional: Store installation info (useful for future updates/uninstallers)
 ; =============================================================================

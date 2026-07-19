@@ -98,6 +98,14 @@ class TestProgressCallbacks:
         result = engine.transliterate_segments([_segment("کیا")])
         assert len(result) == 1
 
+    def test_segment_cb_receives_each_transliterated_segment(self):
+        engine = RuleEngine("ur", "roman")
+        segments = [_segment("کیا", 0), _segment("شکریہ", 1)]
+        received = []
+        engine.transliterate_segments(segments, segment_cb=received.append)
+        assert [seg["id"] for seg in received] == [0, 1]
+        assert received[0]["transliterated"] == "kya"
+
 
 class TestSetSchemes:
     def test_updates_source_and_target(self):

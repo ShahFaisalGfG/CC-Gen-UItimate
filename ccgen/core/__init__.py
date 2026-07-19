@@ -1,6 +1,6 @@
 # core — shared data structures flowing through the pipeline
 
-from typing import TypedDict
+from typing import TypedDict, Union
 
 
 class WordToken(TypedDict):
@@ -45,4 +45,7 @@ class TransliteratedSegment(TypedDict):
     target_scheme: str
 
 
-__all__ = ["WordToken", "Segment", "TranslatedSegment", "TransliteratedSegment"]
+AnySegment = Union[Segment, TranslatedSegment, TransliteratedSegment]
+
+
+__all__ = ["WordToken", "Segment", "TranslatedSegment", "TransliteratedSegment", "AnySegment"]

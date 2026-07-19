@@ -15,5 +15,6 @@ class TransliterationEngine(ABC):
         segments: Union[list[Segment], list[TranslatedSegment]],
         progress_cb: Optional[Callable[[str], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[TransliteratedSegment], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Transliterate a segment list between scripts, preserving timing."""
