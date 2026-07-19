@@ -101,7 +101,7 @@ ApplicationWindow {
                             StyledComboBox {
                                 id: themeCombo
                                 Layout.fillWidth:       true
-                                Layout.preferredHeight: 34
+                                Layout.preferredHeight: 32
                                 font.pixelSize:         12
                                 model: ["System (auto)", "Light", "Dark"]
                                 onCurrentIndexChanged: prefsWin._dirty = true
@@ -149,13 +149,13 @@ ApplicationWindow {
                                     text: "Default model"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id:                     modelCombo
                                     font.pixelSize:         12
-                                    Layout.preferredWidth:  120
-                                    Layout.preferredHeight: 34
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: prefsController.modelOptions
                                     downloadStatus: prefsController.modelStatus
                                     onCurrentIndexChanged: prefsWin._dirty = true
@@ -168,9 +168,13 @@ ApplicationWindow {
                                     text: "Output formats"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
+                                    Layout.alignment: Qt.AlignTop
                                 }
-                                Row {
+                                // Flow wraps onto a second line instead of overflowing/clipping
+                                // when the window is narrow and all five checkboxes don't fit.
+                                Flow {
+                                    Layout.fillWidth: true
                                     spacing: 10
                                     CheckBox {
                                         id: srtCheck
@@ -181,6 +185,24 @@ ApplicationWindow {
                                     CheckBox {
                                         id: vttCheck
                                         text: "VTT"
+                                        font.pixelSize: 12
+                                        onCheckedChanged: prefsWin._dirty = true
+                                    }
+                                    CheckBox {
+                                        id: lrcCheck
+                                        text: "LRC"
+                                        font.pixelSize: 12
+                                        onCheckedChanged: prefsWin._dirty = true
+                                    }
+                                    CheckBox {
+                                        id: assCheck
+                                        text: "ASS"
+                                        font.pixelSize: 12
+                                        onCheckedChanged: prefsWin._dirty = true
+                                    }
+                                    CheckBox {
+                                        id: sbvCheck
+                                        text: "SBV"
                                         font.pixelSize: 12
                                         onCheckedChanged: prefsWin._dirty = true
                                     }
@@ -226,6 +248,7 @@ ApplicationWindow {
                                 }
                                 Switch {
                                     id: translateEnabledSwitch
+                                    scale: 0.85  // qmllint disable missing-property
                                     onCheckedChanged: prefsWin._dirty = true
                                 }
                             }
@@ -237,13 +260,13 @@ ApplicationWindow {
                                     text: "Target language"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id:                     translateTargetCombo
                                     font.pixelSize:         12
-                                    Layout.preferredWidth:  160
-                                    Layout.preferredHeight: 34
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: prefsController.targetOptions.map(o => o.label)
                                     downloadStatus: prefsWin.targetDownloadStatus()
                                     onCurrentIndexChanged: prefsWin._dirty = true
@@ -289,6 +312,7 @@ ApplicationWindow {
                                 }
                                 Switch {
                                     id: translitEnabledSwitch
+                                    scale: 0.85  // qmllint disable missing-property
                                     onCheckedChanged: prefsWin._dirty = true
                                 }
                             }
@@ -301,13 +325,13 @@ ApplicationWindow {
                                     text: "Scheme"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id: translitSourceCombo
-                                    font.pixelSize:         11
-                                    Layout.preferredWidth:  110
-                                    Layout.preferredHeight: 34
+                                    font.pixelSize:         12
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: prefsController.translitSchemeOptions.map(o => o.label)
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
@@ -318,9 +342,9 @@ ApplicationWindow {
                                 }
                                 StyledComboBox {
                                     id: translitTargetCombo
-                                    font.pixelSize:         11
-                                    Layout.preferredWidth:  110
-                                    Layout.preferredHeight: 34
+                                    font.pixelSize:         12
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: prefsController.translitSchemeOptions.map(o => o.label)
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
@@ -333,13 +357,13 @@ ApplicationWindow {
                                     text: "Transliterate from"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id:                     translitInputCombo
                                     font.pixelSize:         12
-                                    Layout.preferredWidth:  160
-                                    Layout.preferredHeight: 34
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: ["Transcription", "Translation"]
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
@@ -352,13 +376,13 @@ ApplicationWindow {
                                     text: "Engine"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id:                     translitEngineCombo
                                     font.pixelSize:         12
-                                    Layout.preferredWidth:  160
-                                    Layout.preferredHeight: 34
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: prefsController.translitEngineOptions.map(o => o.label)
                                     downloadStatus: prefsWin.engineDownloadStatus()
                                     onCurrentIndexChanged: prefsWin._dirty = true
@@ -417,13 +441,13 @@ ApplicationWindow {
                                     text: "Log level"
                                     font.pixelSize: 12
                                     color: Material.foreground
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 130
                                 }
                                 StyledComboBox {
                                     id:                     logLevelCombo
                                     font.pixelSize:         12
-                                    Layout.preferredWidth:  130
-                                    Layout.preferredHeight: 34
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
                                     model: ["Critical (silent)", "All (verbose)"]
                                     onCurrentIndexChanged: prefsWin._dirty = true
                                 }
@@ -459,7 +483,7 @@ ApplicationWindow {
                 text: "Reset to Defaults"
                 flat: true
                 font.pixelSize: 12
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: 36
                 Material.foreground: appController.colorDanger
                 onClicked: prefsController.resetDefaults()
             }
@@ -467,14 +491,14 @@ ApplicationWindow {
             Button {
                 text: "Cancel"
                 font.pixelSize: 12
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: 36
                 onClicked: prefsWin.close()
             }
             Button {
                 text: "Save"
                 highlighted: true
                 font.pixelSize: 12
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: 36
                 onClicked: { prefsWin.applyValues(); prefsWin.close() }
             }
         }
@@ -491,6 +515,9 @@ ApplicationWindow {
             logLevelCombo.currentIndex = prefsController.logLevel === "all" ? 1 : 0
             srtCheck.checked = prefsController.defaultEmitSrt
             vttCheck.checked = prefsController.defaultEmitVtt
+            lrcCheck.checked = prefsController.defaultEmitLrc
+            assCheck.checked = prefsController.defaultEmitAss
+            sbvCheck.checked = prefsController.defaultEmitSbv
 
             translateEnabledSwitch.checked = prefsController.defaultTranslateEnabled
             translateTargetCombo.currentIndex = indexByCode(
@@ -550,6 +577,9 @@ ApplicationWindow {
             prefsController.setSetting("logging.log_level", logLevelCombo.currentIndex === 1 ? "all" : "critical")
             prefsController.setSetting("output.srt", srtCheck.checked)
             prefsController.setSetting("output.vtt", vttCheck.checked)
+            prefsController.setSetting("output.lrc", lrcCheck.checked)
+            prefsController.setSetting("output.ass", assCheck.checked)
+            prefsController.setSetting("output.sbv", sbvCheck.checked)
 
             prefsController.setSetting("translation.enabled", translateEnabledSwitch.checked)
             prefsController.setSetting(

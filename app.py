@@ -14,6 +14,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ccgen.controllers.app_ctrl import AppController
+from ccgen.controllers.assets_ctrl import AssetsController
 from ccgen.controllers.prefs_ctrl import PrefsController
 from ccgen.controllers.transcription_ctrl import TranscriptionController
 from ccgen.ui.boot_thread import BootThread
@@ -40,6 +41,7 @@ class _Startup:
         self._app_ctrl = None
         self._trans_ctrl = None
         self._prefs_ctrl = None
+        self._assets_ctrl = None
 
         self._splash = SplashScreen(resource_path("ccgen/assets/icons/Square310x310Logo.scale-100.png"))
         self._splash.show()
@@ -67,6 +69,7 @@ class _Startup:
             app_ctrl   = AppController()
             trans_ctrl = TranscriptionController(api_server.base_url)
             prefs_ctrl = PrefsController(api_server.base_url)
+            assets_ctrl = AssetsController(api_server.base_url)
             if self._input_paths:
                 trans_ctrl.addFiles(self._input_paths)
                 _log.info("Queued %d file(s) from command line", len(self._input_paths))
@@ -76,6 +79,7 @@ class _Startup:
             ctx.setContextProperty("appController",           app_ctrl)
             ctx.setContextProperty("transcriptionController", trans_ctrl)
             ctx.setContextProperty("prefsController",         prefs_ctrl)
+            ctx.setContextProperty("modelsController",        assets_ctrl)
 
             qml_dir = resource_path("ccgen/qml")
             engine.addImportPath(qml_dir)
@@ -92,6 +96,7 @@ class _Startup:
             self._app_ctrl = app_ctrl
             self._trans_ctrl = trans_ctrl
             self._prefs_ctrl = prefs_ctrl
+            self._assets_ctrl = assets_ctrl
             root = engine.rootObjects()[0]
             self._splash.close()
             if isinstance(root, QQuickWindow):
@@ -118,6 +123,7 @@ class _Startup:
             self._app_ctrl = None
             self._trans_ctrl = None
             self._prefs_ctrl = None
+            self._assets_ctrl = None
             if self._api_server is not None:
                 self._api_server.stop()
         except Exception:

@@ -1,4 +1,4 @@
-# subtitle_parser.py — parse SRT and VTT files into Segment lists
+# subtitle_parser.py — parse SRT, VTT, LRC, ASS/SSA, and SBV files into Segment lists
 
 import logging
 import os
@@ -8,12 +8,19 @@ from ccgen.core import Segment
 
 _log = logging.getLogger(__name__)
 
-_SUBTITLE_EXTS = frozenset({".srt", ".vtt"})
-_ARROW = re.compile(r"\s*-->\s*")
+_SUBTITLE_EXTS = frozenset({".srt", ".vtt", ".lrc", ".ass", ".ssa", ".sbv"})
+_ARROW = re.compile(r"-->")
+_ARROW_SPLIT = re.compile(r"\s*-->\s*")
+_SBV_TIME_LINE = re.compile(r"^\d+:\d{2}:\d{2}\.\d{3}\s*,\s*\d+:\d{2}:\d{2}\.\d{3}$")
+_SBV_SPLIT = re.compile(r"\s*,\s*")
+# A last LRC line has no following timestamp to derive its end from, so it gets a fixed duration.
+_LRC_LAST_LINE_DURATION_S = 4.0
+_LRC_LINE = re.compile(r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$")
+_ASS_OVERRIDE_TAG = re.compile(r"\{.*?\}")
 
 
 def parse_subtitle(path: str) -> list[Segment]:
-    """Detect file type and parse SRT or VTT into a Segment list."""
+    """Detect file type and parse SRT, VTT, LRC, ASS/SSA, or SBV into a Segment list."""
     try:
         ext = os.path.splitext(path)[1].lower()
         _log.info("Parsing subtitle file: %s (%s)", os.path.basename(path), ext)
@@ -21,6 +28,12 @@ def parse_subtitle(path: str) -> list[Segment]:
             segments = _parse_srt(path)
         elif ext == ".vtt":
             segments = _parse_vtt(path)
+        elif ext == ".sbv":
+            segments = _parse_sbv(path)
+        elif ext == ".lrc":
+            segments = _parse_lrc(path)
+        elif ext in (".ass", ".ssa"):
+            segments = _parse_ass(path)
         else:
             raise ValueError(f"Unsupported subtitle extension: {ext!r}")
         _log.info("Parsed %d segments from %s", len(segments), os.path.basename(path))
@@ -67,6 +80,69 @@ def _parse_vtt(path: str) -> list[Segment]:
     return segments
 
 
+def _parse_sbv(path: str) -> list[Segment]:
+    """Parse a YouTube SBV file into a list of Segments."""
+    with open(path, encoding="utf-8-sig") as fh:
+        text = fh.read()
+    segments: list[Segment] = []
+    for idx, block in enumerate(_split_blocks(text)):
+        seg = _build_segment(
+            idx, block, comma_sep=False, find_pattern=_SBV_TIME_LINE, split_pattern=_SBV_SPLIT
+        )
+        if seg:
+            segments.append(seg)
+    return segments
+
+
+def _parse_lrc(path: str) -> list[Segment]:
+    """Parse an LRC lyrics file into a list of Segments (fixed duration for the final line)."""
+    with open(path, encoding="utf-8-sig") as fh:
+        raw_lines = fh.read().splitlines()
+    entries: list[tuple[float, str]] = []
+    for line in raw_lines:
+        match = _LRC_LINE.match(line.strip())
+        if not match:
+            continue
+        minutes, seconds, body = match.groups()
+        body = body.strip()
+        if body:
+            entries.append((int(minutes) * 60 + float(seconds), body))
+    segments: list[Segment] = []
+    for idx, (start, body) in enumerate(entries):
+        end = entries[idx + 1][0] if idx + 1 < len(entries) else start + _LRC_LAST_LINE_DURATION_S
+        segments.append(Segment(id=idx, start=start, end=end, text=body, words=[], language=""))
+    return segments
+
+
+def _parse_ass(path: str) -> list[Segment]:
+    """Parse an ASS/SSA subtitle file's [Events] Dialogue lines into a list of Segments."""
+    with open(path, encoding="utf-8-sig") as fh:
+        raw_lines = fh.read().splitlines()
+    segments: list[Segment] = []
+    idx = 0
+    for line in raw_lines:
+        stripped = line.strip()
+        if not stripped.lower().startswith("dialogue:"):
+            continue
+        fields = stripped[len("dialogue:"):].split(",", 9)
+        if len(fields) < 10:
+            continue
+        start = _to_seconds(fields[1].strip(), comma_sep=False)
+        end = _to_seconds(fields[2].strip(), comma_sep=False)
+        body = _strip_ass_tags(fields[9])
+        if not body:
+            continue
+        segments.append(Segment(id=idx, start=start, end=end, text=body, words=[], language=""))
+        idx += 1
+    return segments
+
+
+def _strip_ass_tags(text: str) -> str:
+    """Strip ASS override tags ('{...}') and convert forced line breaks to spaces."""
+    text = _ASS_OVERRIDE_TAG.sub("", text)
+    return text.replace("\\N", " ").replace("\\n", " ").replace("\\h", " ").strip()
+
+
 def _split_blocks(text: str) -> list[list[str]]:
     """Split raw subtitle text into non-empty line groups."""
     blocks: list[list[str]] = []
@@ -77,12 +153,18 @@ def _split_blocks(text: str) -> list[list[str]]:
     return blocks
 
 
-def _build_segment(idx: int, lines: list[str], comma_sep: bool) -> Segment | None:
+def _build_segment(
+    idx: int,
+    lines: list[str],
+    comma_sep: bool,
+    find_pattern: re.Pattern = _ARROW,
+    split_pattern: re.Pattern = _ARROW_SPLIT,
+) -> Segment | None:
     """Build a Segment from a subtitle block; return None when timestamp is missing."""
-    time_line = _find_timestamp_line(lines)
+    time_line = _find_timestamp_line(lines, find_pattern)
     if time_line is None:
         return None
-    parts = _ARROW.split(lines[time_line], maxsplit=1)
+    parts = split_pattern.split(lines[time_line], maxsplit=1)
     if len(parts) != 2:
         return None
     start = _to_seconds(parts[0], comma_sep)
@@ -93,10 +175,10 @@ def _build_segment(idx: int, lines: list[str], comma_sep: bool) -> Segment | Non
     return Segment(id=idx, start=start, end=end, text=body, words=[], language="")
 
 
-def _find_timestamp_line(lines: list[str]) -> int | None:
-    """Return the index of the first line containing '-->'."""
+def _find_timestamp_line(lines: list[str], pattern: re.Pattern) -> int | None:
+    """Return the index of the first line matching the given timestamp pattern."""
     for i, ln in enumerate(lines):
-        if "-->" in ln:
+        if pattern.search(ln):
             return i
     return None
 

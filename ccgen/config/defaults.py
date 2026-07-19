@@ -58,6 +58,9 @@ class OutputDefaults:
 
     FORMAT_SRT = True
     FORMAT_VTT = False
+    FORMAT_LRC = False
+    FORMAT_ASS = False
+    FORMAT_SBV = False
     MAX_LINE_LENGTH = 42
     MAX_LINES = 2
     MIN_DURATION_MS = 500
@@ -180,6 +183,9 @@ def get_default_settings() -> dict[str, Any]:
         "output": {
             "srt": OutputDefaults.FORMAT_SRT,
             "vtt": OutputDefaults.FORMAT_VTT,
+            "lrc": OutputDefaults.FORMAT_LRC,
+            "ass": OutputDefaults.FORMAT_ASS,
+            "sbv": OutputDefaults.FORMAT_SBV,
             "max_line_length": OutputDefaults.MAX_LINE_LENGTH,
             "max_lines": OutputDefaults.MAX_LINES,
         },

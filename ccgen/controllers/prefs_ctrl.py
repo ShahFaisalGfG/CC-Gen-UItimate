@@ -157,6 +157,18 @@ class PrefsController(QObject):
         return bool(self._get("output", "vtt", default=False))
 
     @Property(bool, notify=settingsChanged)
+    def defaultEmitLrc(self) -> bool:
+        return bool(self._get("output", "lrc", default=False))
+
+    @Property(bool, notify=settingsChanged)
+    def defaultEmitAss(self) -> bool:
+        return bool(self._get("output", "ass", default=False))
+
+    @Property(bool, notify=settingsChanged)
+    def defaultEmitSbv(self) -> bool:
+        return bool(self._get("output", "sbv", default=False))
+
+    @Property(bool, notify=settingsChanged)
     def defaultTranslateEnabled(self) -> bool:
         return bool(self._get("translation", "enabled", default=False))
 

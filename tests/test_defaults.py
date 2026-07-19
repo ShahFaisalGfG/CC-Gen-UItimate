@@ -30,6 +30,13 @@ class TestGetDefaultSettings:
             "enabled", "source", "target", "input_source", "engine",
         }
 
+    def test_output_section_keys_used_by_settings_service(self):
+        settings = get_default_settings()
+        output = settings["output"]
+        assert set(output.keys()) == {
+            "srt", "vtt", "lrc", "ass", "sbv", "max_line_length", "max_lines",
+        }
+
 
 class TestModelDefaults:
     def test_supported_models_non_empty(self):

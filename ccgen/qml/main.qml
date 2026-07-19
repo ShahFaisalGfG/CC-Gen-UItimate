@@ -21,6 +21,10 @@ ApplicationWindow {
     Material.theme: appController && appController.currentTheme === "dark" ? Material.Dark : Material.Light
     Material.accent: "#0078d4"
 
+    // Default Material dim reads as a washed-out/frozen window rather than a modal
+    // in front, so dialogs get an explicit dark scrim instead (consistent in both themes).
+    Overlay.modal: Rectangle { color: "#99000000" }
+
     Component.onCompleted: {
         x = Screen.virtualX + Math.round((Screen.desktopAvailableWidth  - width)  / 2)
         y = Screen.virtualY + Math.round((Screen.desktopAvailableHeight - height) / 2)
@@ -38,6 +42,12 @@ ApplicationWindow {
         target: transcriptionController
 
         function onSegmentAdded(id, start, end, text) {
+            for (var i = 0; i < segmentModel.count; i++) {
+                if (segmentModel.get(i).segId === id) {
+                    segmentModel.setProperty(i, "segText", text)
+                    return
+                }
+            }
             segmentModel.append({ segId: id, segStart: start, segEnd: end, segText: text })
         }
 
@@ -107,6 +117,9 @@ ApplicationWindow {
 
         srtCheck.checked = transcriptionController.emitSrt
         vttCheck.checked = transcriptionController.emitVtt
+        lrcCheck.checked = transcriptionController.emitLrc
+        assCheck.checked = transcriptionController.emitAss
+        sbvCheck.checked = transcriptionController.emitSbv
     }
 
     function indexOfCode(options, code, fallback) {
@@ -140,10 +153,10 @@ ApplicationWindow {
         id: filePicker
         title: "Add Media Files"
         nameFilters: [
-            "Supported files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts *.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma *.srt *.vtt)",
+            "Supported files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts *.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma *.srt *.vtt *.lrc *.ass *.ssa *.sbv)",
             "Video files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts)",
             "Audio files (*.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma)",
-            "Subtitle files (*.srt *.vtt)",
+            "Subtitle files (*.srt *.vtt *.lrc *.ass *.ssa *.sbv)",
             "All files (*)"
         ]
         fileMode: FileDialog.OpenFiles
@@ -207,7 +220,7 @@ ApplicationWindow {
 
                             Text {
                                 text: "Files (" + transcriptionController.fileModel.count + ")"
-                                font.pixelSize: 10
+                                font.pixelSize: 11
                                 font.weight:    Font.Bold
                                 color: appController.colorTextSecondary
                             }
@@ -291,7 +304,7 @@ ApplicationWindow {
                                 StyledComboBox {
                                     id: modelCombo
                                     Layout.fillWidth:       true
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredHeight: 32
                                     font.pixelSize:         12
                                     model: prefsController.modelOptions
                                     downloadStatus: prefsController.modelStatus
@@ -316,7 +329,7 @@ ApplicationWindow {
                                 StyledComboBox {
                                     id: langCombo
                                     Layout.fillWidth:       true
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredHeight: 32
                                     font.pixelSize:         12
                                     model: prefsController.languageOptions.map(o => o.label)
                                     currentIndex: 0
@@ -345,13 +358,14 @@ ApplicationWindow {
                                 }
                                 Switch {
                                     id: translateSwitch
+                                    scale: 0.85  // qmllint disable missing-property
                                     checked: false
                                     onCheckedChanged: transcriptionController.setTranslate(checked)
                                 }
                                 StyledComboBox {
                                     id: targetLangCombo
                                     Layout.fillWidth:       true
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredHeight: 32
                                     font.pixelSize:         12
                                     visible: translateSwitch.checked
                                     model: prefsController.targetOptions.map(o => o.label)
@@ -381,17 +395,20 @@ ApplicationWindow {
                                 }
                                 Switch {
                                     id: translitSwitch
+                                    scale: 0.85  // qmllint disable missing-property
                                     checked: false
                                     onCheckedChanged: transcriptionController.setTransliterate(checked)
                                 }
-                                Row {
+                                RowLayout {
+                                    Layout.fillWidth: true
                                     spacing: 6
                                     visible: translitSwitch.checked
 
                                     StyledComboBox {
                                         id: translitSrcCombo
-                                        width: 100; height: 34
-                                        font.pixelSize: 11
+                                        Layout.fillWidth:       true
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 12
                                         model: prefsController.translitSchemeOptions.map(o => o.label)
                                         currentIndex: 0
                                         onCurrentIndexChanged: {
@@ -401,15 +418,16 @@ ApplicationWindow {
                                         }
                                     }
                                     Text {
-                                        anchors.verticalCenter: parent.verticalCenter
+                                        Layout.alignment: Qt.AlignVCenter
                                         text: "→"
                                         font.pixelSize: 12
                                         color: Material.foreground
                                     }
                                     StyledComboBox {
                                         id: translitTgtCombo
-                                        width: 100; height: 34
-                                        font.pixelSize: 11
+                                        Layout.fillWidth:       true
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 12
                                         model: prefsController.translitSchemeOptions.map(o => o.label)
                                         currentIndex: {
                                             var opts = prefsController.translitSchemeOptions
@@ -438,9 +456,9 @@ ApplicationWindow {
                                 }
                                 StyledComboBox {
                                     id: translitEngineCombo
-                                    Layout.preferredWidth:  150
-                                    Layout.preferredHeight: 30
-                                    font.pixelSize: 11
+                                    Layout.fillWidth:       true
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: 12
                                     model: prefsController.translitEngineOptions.map(o => o.label)
                                     downloadStatus: engineDownloadStatus()
                                     currentIndex: 0
@@ -466,20 +484,48 @@ ApplicationWindow {
                                     font.pixelSize: 12
                                     color: Material.foreground
                                     Layout.preferredWidth: 110
+                                    Layout.alignment: Qt.AlignTop
                                 }
-                                CheckBox {
-                                    id: srtCheck
-                                    text: "SRT"
-                                    font.pixelSize: 12
-                                    checked: true
-                                    onCheckedChanged: transcriptionController.setEmitSrt(checked)
-                                }
-                                CheckBox {
-                                    id: vttCheck
-                                    text: "VTT"
-                                    font.pixelSize: 12
-                                    checked: false
-                                    onCheckedChanged: transcriptionController.setEmitVtt(checked)
+                                // Flow wraps onto a second line instead of overflowing/clipping
+                                // when the window is narrow and all five checkboxes don't fit.
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    CheckBox {
+                                        id: srtCheck
+                                        text: "SRT"
+                                        font.pixelSize: 12
+                                        checked: true
+                                        onCheckedChanged: transcriptionController.setEmitSrt(checked)
+                                    }
+                                    CheckBox {
+                                        id: vttCheck
+                                        text: "VTT"
+                                        font.pixelSize: 12
+                                        checked: false
+                                        onCheckedChanged: transcriptionController.setEmitVtt(checked)
+                                    }
+                                    CheckBox {
+                                        id: lrcCheck
+                                        text: "LRC"
+                                        font.pixelSize: 12
+                                        checked: false
+                                        onCheckedChanged: transcriptionController.setEmitLrc(checked)
+                                    }
+                                    CheckBox {
+                                        id: assCheck
+                                        text: "ASS"
+                                        font.pixelSize: 12
+                                        checked: false
+                                        onCheckedChanged: transcriptionController.setEmitAss(checked)
+                                    }
+                                    CheckBox {
+                                        id: sbvCheck
+                                        text: "SBV"
+                                        font.pixelSize: 12
+                                        checked: false
+                                        onCheckedChanged: transcriptionController.setEmitSbv(checked)
+                                    }
                                 }
                             }
 
@@ -505,7 +551,7 @@ ApplicationWindow {
                                     text: "▶  Start"
                                     highlighted: true
                                     font.pixelSize: 12
-                                    Layout.preferredHeight: 38
+                                    Layout.preferredHeight: 36
                                     enabled: transcriptionController.fileModel.count > 0
                                     onClicked: {
                                         var paths = transcriptionController.fileModel.getPaths()
@@ -518,10 +564,24 @@ ApplicationWindow {
                                 }
 
                                 Button {
+                                    text: "📦  Manage Models"
+                                    flat: true
+                                    font.pixelSize: 12
+                                    Layout.preferredHeight: 36
+                                    onClicked: {
+                                        var comp = Qt.createComponent("ManageModelsWindow.qml")
+                                        if (comp.status === Component.Ready) {
+                                            var win = comp.createObject(mainWin)
+                                            if (win) win.show()  // qmllint disable missing-property
+                                        }
+                                    }
+                                }
+
+                                Button {
                                     text: "⚙  Preferences"
                                     flat: true
                                     font.pixelSize: 12
-                                    Layout.preferredHeight: 38
+                                    Layout.preferredHeight: 36
                                     onClicked: {
                                         var comp = Qt.createComponent("PreferencesWindow.qml")
                                         if (comp.status === Component.Ready) {
@@ -535,7 +595,7 @@ ApplicationWindow {
                                     text: "ℹ  About"
                                     flat: true
                                     font.pixelSize: 12
-                                    Layout.preferredHeight: 38
+                                    Layout.preferredHeight: 36
                                     onClicked: aboutDialog.open()
                                 }
                             }
@@ -625,7 +685,7 @@ ApplicationWindow {
                         Button {
                             Layout.fillWidth:       true
                             Layout.margins:         12
-                            Layout.preferredHeight: 38
+                            Layout.preferredHeight: 36
                             text: "Cancel"
                             font.pixelSize: 12
                             Material.foreground: appController.colorDanger

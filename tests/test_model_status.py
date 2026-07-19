@@ -10,8 +10,9 @@ from ccgen.utils.model_status import (
 
 
 class _FakeRepo:
-    def __init__(self, repo_id):
+    def __init__(self, repo_id, repo_path):
         self.repo_id = repo_id
+        self.repo_path = repo_path
 
 
 class _FakePackage:
@@ -20,10 +21,14 @@ class _FakePackage:
         self.to_code = to_code
 
 
-def _fake_cache(repo_ids):
-    """Build a fake huggingface_hub CacheInfo-like object with the given repo ids."""
+def _fake_cache(repo_ids, repo_path="/nonexistent"):
+    """Build a fake huggingface_hub CacheInfo-like object with the given repo ids.
+
+    `repo_path` defaults to a directory with no `blobs/*.incomplete` files, so callers
+    that only care about presence/absence don't need to think about completeness.
+    """
     cache_info = MagicMock()
-    cache_info.repos = [_FakeRepo(repo_id) for repo_id in repo_ids]
+    cache_info.repos = [_FakeRepo(repo_id, repo_path) for repo_id in repo_ids]
     return cache_info
 
 
@@ -110,3 +115,23 @@ class TestRepoCachedErrorHandling:
             side_effect=OSError("cache dir missing"),
         ):
             assert whisper_cached("tiny") is False
+
+
+class TestRepoCachedIncompleteDownload:
+    def test_stray_incomplete_blob_reports_not_cached(self, tmp_path):
+        # An app crash or force-close mid-download leaves the small metadata files
+        # resolved but the large weight file as a stray `.incomplete` blob with no
+        # snapshot symlink - scan_cache_dir() still lists the repo, so this must not
+        # read as "downloaded" even though some files are genuinely present.
+        (tmp_path / "blobs").mkdir()
+        (tmp_path / "blobs" / "abc123.incomplete").write_bytes(b"partial")
+        cache = _fake_cache(["Systran/faster-whisper-tiny"], repo_path=str(tmp_path))
+        with patch("ccgen.utils.model_status.scan_cache_dir", return_value=cache):
+            assert whisper_cached("tiny") is False
+
+    def test_no_incomplete_blob_reports_cached(self, tmp_path):
+        (tmp_path / "blobs").mkdir()
+        (tmp_path / "blobs" / "abc123").write_bytes(b"complete")
+        cache = _fake_cache(["Systran/faster-whisper-tiny"], repo_path=str(tmp_path))
+        with patch("ccgen.utils.model_status.scan_cache_dir", return_value=cache):
+            assert whisper_cached("tiny") is True

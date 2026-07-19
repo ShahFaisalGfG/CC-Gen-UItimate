@@ -1,11 +1,12 @@
 # test_audio.py — unit tests for ccgen.core.audio
 
 import os
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ccgen.core.audio import cleanup_temp, extract_audio
+from ccgen.core.audio import _run_ffmpeg, cleanup_temp, extract_audio
 
 
 class TestExtractAudio:
@@ -45,6 +46,27 @@ class TestExtractAudio:
                 result = extract_audio(str(fake))
         assert result.endswith(".wav")
         cleanup_temp(result)
+
+
+class TestRunFfmpeg:
+    def test_runs_without_visible_console_window(self, tmp_path):
+        fake = tmp_path / "video.mp4"
+        fake.write_bytes(b"fake")
+        out = tmp_path / "out.wav"
+        with patch("ccgen.core.audio.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            _run_ffmpeg(str(fake), str(out))
+        _, kwargs = mock_run.call_args
+        assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
+
+    def test_nonzero_exit_raises_runtime_error_with_stderr(self, tmp_path):
+        fake = tmp_path / "video.mp4"
+        fake.write_bytes(b"fake")
+        out = tmp_path / "out.wav"
+        error = subprocess.CalledProcessError(1, ["ffmpeg"], stderr=b"invalid data found")
+        with patch("ccgen.core.audio.subprocess.run", side_effect=error):
+            with pytest.raises(RuntimeError, match="invalid data found"):
+                _run_ffmpeg(str(fake), str(out))
 
 
 class TestCleanupTemp:

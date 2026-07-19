@@ -186,6 +186,26 @@ Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.vtt\shell\CCGenUlt
 Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.vtt\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.vtt\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
 
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.lrc\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ass\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.ssa\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: ""; ValueData: "Generate Subtitles with CC-Gen-Ultimate"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\icons\CCGenUltimate.ico"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.sbv\shell\CCGenUltimateSubtitles"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{5E1DC6F3-4ECF-47F4-BB26-F8D3097DE182}"; Flags: uninsdeletekey; Tasks: contextmenu
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "https://github.com/ShahFaisalGfG/CC-Gen-UItimate"; Description: "View README on GitHub"; Flags: shellexec nowait postinstall skipifsilent

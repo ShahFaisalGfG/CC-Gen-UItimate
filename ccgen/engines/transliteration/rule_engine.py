@@ -51,6 +51,7 @@ class RuleEngine(TransliterationEngine):
         segments: Union[list[Segment], list[TranslatedSegment]],
         progress_cb: Optional[Callable[[str], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[TransliteratedSegment], None]] = None,
     ) -> list[TransliteratedSegment]:
         """Transliterate a segment list between scripts, preserving timing."""
         try:
@@ -60,7 +61,7 @@ class RuleEngine(TransliterationEngine):
             )
             total = len(segments)
             results = [
-                self._convert_one(seg, idx + 1, total, progress_cb, progress_num_cb)
+                self._convert_one(seg, idx + 1, total, progress_cb, progress_num_cb, segment_cb)
                 for idx, seg in enumerate(segments)
             ]
             _log.info("Transliteration complete: %d segments", len(results))
@@ -76,18 +77,13 @@ class RuleEngine(TransliterationEngine):
         total: int,
         progress_cb: Optional[Callable[[str], None]],
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
+        segment_cb: Optional[Callable[[TransliteratedSegment], None]] = None,
     ) -> TransliteratedSegment:
         """Transliterate a single segment and return a TransliteratedSegment."""
         try:
             source_text: str = seg.get("translated", seg.get("text", ""))  # type: ignore[assignment,call-overload]
             converted = self._convert_text(source_text)
-            if progress_cb:
-                try:
-                    progress_cb(f"Transliterated segment {seg['id'] + 1}")
-                except Exception:
-                    pass
-            _num_cb(progress_num_cb, position, total)
-            return TransliteratedSegment(
+            result = TransliteratedSegment(
                 id=seg["id"],
                 start=seg["start"],
                 end=seg["end"],
@@ -96,6 +92,14 @@ class RuleEngine(TransliterationEngine):
                 source_scheme=self._source_key,
                 target_scheme=self._target_key,
             )
+            if progress_cb:
+                try:
+                    progress_cb(f"Transliterated segment {seg['id'] + 1}")
+                except Exception:
+                    pass
+            _seg_cb(segment_cb, result)
+            _num_cb(progress_num_cb, position, total)
+            return result
         except Exception as e:
             _log.error("Segment %s transliteration error: %r", seg.get("id", "?"), e, exc_info=True)  # type: ignore[call-overload]
             raise RuntimeError(f"Segment {seg.get('id', '?')} transliteration error: {e}") from e  # type: ignore[call-overload]
@@ -135,5 +139,14 @@ def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> 
     try:
         if fn:
             fn(done, total)
+    except Exception:
+        pass
+
+
+def _seg_cb(fn: Optional[Callable[[TransliteratedSegment], None]], seg: TransliteratedSegment) -> None:
+    """Call a per-segment result callback safely when present."""
+    try:
+        if fn:
+            fn(seg)
     except Exception:
         pass

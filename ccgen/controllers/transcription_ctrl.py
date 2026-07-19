@@ -20,7 +20,7 @@ from ccgen.models.file_model import MediaFileModel
 _MEDIA_EXTS = frozenset({
     ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".ts", ".m2ts",
     ".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".wma",
-    ".srt", ".vtt",
+    ".srt", ".vtt", ".lrc", ".ass", ".ssa", ".sbv",
 })
 
 
@@ -29,7 +29,10 @@ class TranscriptionController(QObject):
 
     busyChanged       = Signal(bool)
     segmentAdded      = Signal(int, float, float, str)
-    progressChanged   = Signal(int, int)
+    # 64-bit: this also carries raw byte progress during pipeline.prepare()'s model
+    # download phase - a plain 32-bit Qt `int` overflows past ~2.147 GB (e.g. the
+    # large-v3 Whisper model, ~3.1 GB), silently dropping the event.
+    progressChanged   = Signal('qlonglong', 'qlonglong')  # type: ignore[arg-type]
     statusChanged     = Signal(str)
     operationFinished = Signal(bool, str, list)
     defaultsLoaded    = Signal()
@@ -50,6 +53,9 @@ class TranscriptionController(QObject):
         self._target_lang = TranslationDefaults.DEFAULT_TARGET_LANG
         self._emit_srt    = OutputDefaults.FORMAT_SRT
         self._emit_vtt    = OutputDefaults.FORMAT_VTT
+        self._emit_lrc    = OutputDefaults.FORMAT_LRC
+        self._emit_ass    = OutputDefaults.FORMAT_ASS
+        self._emit_sbv    = OutputDefaults.FORMAT_SBV
         self._transliterate   = TransliterationDefaults.ENABLED
         self._translit_src    = TransliterationDefaults.DEFAULT_SOURCE
         self._translit_tgt    = TransliterationDefaults.DEFAULT_TARGET
@@ -92,6 +98,18 @@ class TranscriptionController(QObject):
     @Property(bool)
     def emitVtt(self) -> bool:
         return self._emit_vtt
+
+    @Property(bool)
+    def emitLrc(self) -> bool:
+        return self._emit_lrc
+
+    @Property(bool)
+    def emitAss(self) -> bool:
+        return self._emit_ass
+
+    @Property(bool)
+    def emitSbv(self) -> bool:
+        return self._emit_sbv
 
     @Property(bool)
     def transliterateEnabled(self) -> bool:
@@ -180,6 +198,18 @@ class TranscriptionController(QObject):
         self._emit_vtt = value
 
     @Slot(bool)
+    def setEmitLrc(self, value: bool) -> None:
+        self._emit_lrc = value
+
+    @Slot(bool)
+    def setEmitAss(self, value: bool) -> None:
+        self._emit_ass = value
+
+    @Slot(bool)
+    def setEmitSbv(self, value: bool) -> None:
+        self._emit_sbv = value
+
+    @Slot(bool)
     def setTransliterate(self, enabled: bool) -> None:
         self._transliterate = enabled
 
@@ -261,6 +291,9 @@ class TranscriptionController(QObject):
         self._target_lang = translation.get("target_lang", self._target_lang)
         self._emit_srt    = output.get("srt", self._emit_srt)
         self._emit_vtt    = output.get("vtt", self._emit_vtt)
+        self._emit_lrc    = output.get("lrc", self._emit_lrc)
+        self._emit_ass    = output.get("ass", self._emit_ass)
+        self._emit_sbv    = output.get("sbv", self._emit_sbv)
         self._transliterate   = translit.get("enabled", self._transliterate)
         self._translit_src    = translit.get("source", self._translit_src)
         self._translit_tgt    = translit.get("target", self._translit_tgt)
@@ -280,6 +313,9 @@ class TranscriptionController(QObject):
             "target_lang": self._target_lang,
             "emit_srt": self._emit_srt,
             "emit_vtt": self._emit_vtt,
+            "emit_lrc": self._emit_lrc,
+            "emit_ass": self._emit_ass,
+            "emit_sbv": self._emit_sbv,
             "transliterate": self._transliterate,
             "translit_source": self._translit_src,
             "translit_target": self._translit_tgt,

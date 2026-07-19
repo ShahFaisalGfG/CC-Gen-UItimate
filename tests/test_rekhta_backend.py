@@ -36,11 +36,50 @@ class TestConvertBeforeLoad:
 
 
 class TestLoad:
-    def test_wraps_all_three_downloads_in_one_progress_context(self):
+    def test_cached_files_load_via_local_files_only_without_progress_context(self):
+        vocab_size = 6
+
+        def fake_hub_download(_repo_id, filename, **kwargs):
+            assert kwargs.get("local_files_only") is True
+            return f"/fake/{filename}"
+
+        template = _CharTransformer(vocab_size, vocab_size)
+        checkpoint = {
+            "model_state_dict": OrderedDict(
+                (f"module.{name}", tensor) for name, tensor in template.state_dict().items()
+            ),
+        }
+        mock_sp = MagicMock()
+        mock_sp.get_piece_size.return_value = vocab_size
+
+        backend = RekhtaBackend()
+        with patch(
+            "ccgen.engines.transliteration.rekhta_backend.hf_hub_download",
+            side_effect=fake_hub_download,
+        ):
+            with patch(
+                "ccgen.engines.transliteration.rekhta_backend.download_progress",
+            ) as mock_download_progress:
+                with patch(
+                    "ccgen.engines.transliteration.rekhta_backend.spm.SentencePieceProcessor",
+                    return_value=mock_sp,
+                ):
+                    with patch(
+                        "ccgen.engines.transliteration.rekhta_backend.torch.load",
+                        return_value=checkpoint,
+                    ):
+                        backend.load()
+
+        mock_download_progress.assert_not_called()
+        assert isinstance(backend._model, _CharTransformer)
+
+    def test_uncached_files_fall_back_to_download_with_progress_context(self):
         call_order = []
         vocab_size = 6
 
-        def fake_hub_download(_repo_id, filename):
+        def fake_hub_download(_repo_id, filename, **kwargs):
+            if kwargs.get("local_files_only"):
+                raise OSError("not cached")
             call_order.append(f"download:{filename}")
             return f"/fake/{filename}"
 
@@ -79,6 +118,47 @@ class TestLoad:
             "download:nastaaliq_bpe.model",
             "exit",
         ]
+        assert isinstance(backend._model, _CharTransformer)
+
+    def test_transient_download_failure_is_retried(self):
+        vocab_size = 4
+        attempts = {"count": 0}
+
+        def flaky_hub_download(_repo_id, filename, **kwargs):
+            if kwargs.get("local_files_only"):
+                raise OSError("not cached")
+            if filename == "h2u_2.0.pt":
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise OSError("cold download race, try again")
+            return f"/fake/{filename}"
+
+        template = _CharTransformer(vocab_size, vocab_size)
+        checkpoint = {
+            "model_state_dict": OrderedDict(
+                (f"module.{name}", tensor) for name, tensor in template.state_dict().items()
+            ),
+        }
+        mock_sp = MagicMock()
+        mock_sp.get_piece_size.return_value = vocab_size
+
+        backend = RekhtaBackend()
+        with patch("ccgen.utils.download_progress.time.sleep"):
+            with patch(
+                "ccgen.engines.transliteration.rekhta_backend.hf_hub_download",
+                side_effect=flaky_hub_download,
+            ):
+                with patch(
+                    "ccgen.engines.transliteration.rekhta_backend.spm.SentencePieceProcessor",
+                    return_value=mock_sp,
+                ):
+                    with patch(
+                        "ccgen.engines.transliteration.rekhta_backend.torch.load",
+                        return_value=checkpoint,
+                    ):
+                        backend.load()
+
+        assert attempts["count"] == 2
         assert isinstance(backend._model, _CharTransformer)
 
     def test_download_failure_raises_runtime_error_with_cause(self):

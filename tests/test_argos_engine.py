@@ -88,6 +88,7 @@ class TestEnsureModelDownload:
 
         assert messages == [
             "Downloading translation model en→es...",
+            "Installing...",
             "Translation model ready.",
         ]
 
@@ -143,6 +144,23 @@ class TestTranslateSegments:
             progress_num_cb=lambda done, total: calls.append((done, total)),
         )
         assert calls == [(1, 2), (2, 2)]
+
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.translate")
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.package")
+    def test_segment_cb_receives_each_translated_segment(self, mock_package, mock_translate):
+        mock_package.get_installed_packages.return_value = [_FakePackage("en", "es")]
+        fake_engine = MagicMock()
+        fake_engine.translate.return_value = "Hola"
+        mock_translate.get_translation_from_codes.return_value = fake_engine
+
+        engine = ArgosEngine("en", "es")
+        engine.ensure_model()
+        received = []
+        engine.translate_segments([_segment("Hello", seg_id=5)], segment_cb=received.append)
+
+        assert len(received) == 1
+        assert received[0]["id"] == 5
+        assert received[0]["translated"] == "Hola"
 
 
 class TestSetPair:
