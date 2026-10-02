@@ -1,11 +1,13 @@
-# assets_ctrl.py — Manage Models controller (HTTP/WebSocket client of the embedded API)
+# assets_ctrl.py - Manage Models controller (HTTP/WebSocket client of the embedded API)
 
-import json
-from typing import Any
+from typing import Any, Optional
 
-from PySide6.QtCore import Property, QByteArray, QObject, QUrl, Signal, Slot
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtWebSockets import QWebSocket
+
+from ccgen.config.capabilities import neural_model_key, translation_asset_ids
+from ccgen.config.voices import ENGINE_KOKORO, ENGINE_PIPER, ENGINE_XTTS
+from ccgen.controllers.api_client import ApiClient
 
 
 class AssetsController(QObject):
@@ -15,90 +17,103 @@ class AssetsController(QObject):
     assetQueued     = Signal(str)
     # 64-bit: byte counts for multi-gigabyte models (e.g. large-v3, ~3.1 GB) overflow a
     # plain 32-bit Qt `int` (max ~2.147 GB), which raised inside PySide6's binding layer
-    # and was silently swallowed by _on_stream_message's broad except - dropping every
-    # progress event for any asset whose size crosses that line.
+    # and silently dropped every progress event for any asset past that size.
     assetProgress   = Signal(str, 'qlonglong', 'qlonglong')  # type: ignore[arg-type]
     assetStatus     = Signal(str, str)
     assetFinished   = Signal(str, bool, str)
+    removeFailed    = Signal(str, str)
 
     def __init__(self, base_url: str, parent=None):
         super().__init__(parent)
-        self._base_url = base_url
-        self._net = QNetworkAccessManager(self)
+        self._api = ApiClient(base_url, self)
         self._assets: list[dict[str, Any]] = []
-        self._socket = QWebSocket()
-        self._socket.textMessageReceived.connect(self._on_stream_message)
-        self._socket.open(QUrl(f"{self._ws_base_url()}/assets/stream"))
+        self._readiness: dict[str, bool] = {}
+        self._socket: Optional[QWebSocket] = self._api.open_stream("/assets/stream", self._on_stream_event)
         self.refreshAssets()
-
-    def _ws_base_url(self) -> str:
-        """Return the base URL rewritten to the ws(s):// scheme."""
-        return self._base_url.replace("http://", "ws://").replace("https://", "wss://")
 
     @Property("QVariantList", notify=assetsChanged)  # type: ignore[arg-type]
     def assets(self) -> list:
         """Current catalog snapshot: id/category/label/downloaded/size for every asset."""
         return self._assets
 
+    @Property("QVariantMap", notify=assetsChanged)  # type: ignore[arg-type]
+    def readiness(self) -> dict:
+        """Map of asset id to whether it is downloaded, for ready/needs-download badges."""
+        return self._readiness
+
+    @Slot(str, result=str)
+    def whisperAssetId(self, model_name: str) -> str:
+        """Catalog id of a Whisper model."""
+        return f"whisper:{model_name}"
+
+    @Slot(str, str, result=list)
+    def translationAssetIds(self, source: str, target: str) -> list:
+        """Catalog ids of every package translating source→target needs (none for "auto" source)."""
+        return translation_asset_ids("" if source == "auto" else source, target)
+
+    @Slot(str, str, result=str)
+    def voiceAssetId(self, mode: str, voice_key: str) -> str:
+        """Catalog id of what a dubbing mode downloads: its model, or a Piper voice ("" when unknown)."""
+        if mode == ENGINE_PIPER:
+            return f"voices:{voice_key}" if voice_key.startswith(f"{ENGINE_PIPER}:") else ""
+        return f"voices:{mode}" if mode in (ENGINE_XTTS, ENGINE_KOKORO) else ""
+
+    @Slot(str, str, result=str)
+    def neuralAssetId(self, source: str, target: str) -> str:
+        """Catalog id of the neural transliteration model for a script pair, "" when none exists."""
+        key = neural_model_key(source, target)
+        return f"transliteration:{key}" if key else ""
+
     @Slot()
     def refreshAssets(self) -> None:
         """Re-fetch the asset catalog from the embedded API."""
-        request = QNetworkRequest(QUrl(f"{self._base_url}/assets"))
-        reply = self._net.get(request)
-        reply.finished.connect(lambda: self._on_assets_fetched(reply))
-
-    def _on_assets_fetched(self, reply: QNetworkReply) -> None:
-        """Apply the fetched catalog and notify QML."""
-        try:
-            reply.deleteLater()
-            if reply.error() != QNetworkReply.NetworkError.NoError:
-                return
-            self._assets = json.loads(bytes(reply.readAll().data()).decode("utf-8"))
-            self.assetsChanged.emit()
-        except Exception:
-            pass
+        self._api.get("/assets", self._on_assets)
 
     @Slot(str)
     def downloadAsset(self, asset_id: str) -> None:
         """Queue an asset for download."""
-        request = QNetworkRequest(QUrl(f"{self._base_url}/assets/{asset_id}/download"))
-        reply = self._net.post(request, QByteArray())
-        reply.finished.connect(reply.deleteLater)
+        self._api.post(f"/assets/{asset_id}/download")
 
     @Slot(str)
     def cancelAsset(self, asset_id: str) -> None:
         """Cancel a queued or in-progress asset download."""
-        request = QNetworkRequest(QUrl(f"{self._base_url}/assets/{asset_id}/cancel"))
-        reply = self._net.post(request, QByteArray())
-        reply.finished.connect(reply.deleteLater)
+        self._api.post(f"/assets/{asset_id}/cancel")
 
     @Slot(str)
     def removeAsset(self, asset_id: str) -> None:
-        """Delete a downloaded asset from local storage."""
-        request = QNetworkRequest(QUrl(f"{self._base_url}/assets/{asset_id}"))
-        reply = self._net.deleteResource(request)
-        reply.finished.connect(lambda: self._on_asset_removed(reply))
+        """Delete a downloaded asset from local storage, reporting failures to QML."""
 
-    def _on_asset_removed(self, reply: QNetworkReply) -> None:
-        """Refresh the catalog once a removal request completes."""
-        reply.deleteLater()
-        self.refreshAssets()
+        def done(_data: Any, error: str) -> None:
+            if error:
+                self.removeFailed.emit(asset_id, error)
+            self.refreshAssets()
 
-    def _on_stream_message(self, message: str) -> None:
-        """Parse one JSON event from the assets stream and re-emit the matching Qt signal."""
-        try:
-            event: dict[str, Any] = json.loads(message)
-            kind = event.get("event")
-            if kind == "queued":
-                self.assetQueued.emit(event["id"])
-            elif kind == "status":
-                self.assetStatus.emit(event["id"], event["message"])
-            elif kind == "progress":
-                self.assetProgress.emit(event["id"], event["done"], event["total"])
-            elif kind == "finished":
-                self.assetFinished.emit(
-                    event["id"], bool(event.get("success")), event.get("error") or ""
-                )
-                self.refreshAssets()
-        except Exception:
-            pass
+        self._api.delete(f"/assets/{asset_id}", done)
+
+    def close(self) -> None:
+        """Close the event stream (used on shutdown)."""
+        socket, self._socket = self._socket, None
+        if socket is not None:
+            socket.close()
+
+    def _on_assets(self, data: Any, error: str) -> None:
+        """Apply the fetched catalog and notify QML."""
+        if error or not isinstance(data, list):
+            return
+        self._assets = data
+        self._readiness = {str(a.get("id")): bool(a.get("downloaded")) for a in data}
+        self.assetsChanged.emit()
+
+    def _on_stream_event(self, event: dict[str, Any]) -> None:
+        """Re-emit one assets stream event as the matching Qt signal."""
+        kind = event.get("event")
+        asset_id = str(event.get("id", ""))
+        if kind == "queued":
+            self.assetQueued.emit(asset_id)
+        elif kind == "status":
+            self.assetStatus.emit(asset_id, str(event.get("message", "")))
+        elif kind == "progress":
+            self.assetProgress.emit(asset_id, int(event["done"]), int(event["total"]))
+        elif kind == "finished":
+            self.assetFinished.emit(asset_id, bool(event.get("success")), str(event.get("error") or ""))
+            self.refreshAssets()

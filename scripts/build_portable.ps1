@@ -6,16 +6,19 @@
     No installer is produced - the exe runs directly without installation.
     Note: the Explorer context-menu integration is installer-only (it needs registry
     entries), so the portable build does not include ccgen_shell.dll.
+.PARAMETER Gpu
+    Which GPU the build's PyTorch targets: "cuda" (NVIDIA, the default) or "xpu" (Intel Arc and
+    Core Ultra; file names get an "_intel_gpu" suffix). See scripts/bundle.ps1.
 .NOTES
     Requirements: Python venv with pyinstaller>=6.17
 #>
 
+param(
+    [ValidateSet("cuda", "xpu")] [string]$Gpu = "cuda"
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
-# ── Configuration ─────────────────────────────────────────────────────────────
-
-$Entry = "app.py"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,10 +51,11 @@ Set-Location $ProjectRoot
 # ── App metadata ──────────────────────────────────────────────────────────────
 
 . "$ScriptDir\app_meta.ps1"
+. "$ScriptDir\bundle.ps1"
 $Meta         = Get-AppMeta
 $AppName      = $Meta.AppName
 $Version      = $Meta.Version
-$PortableName = "${AppName}_${Version}_portable"
+$PortableName = "${AppName}_${Version}$($GpuSuffix[$Gpu])_portable"
 $OutputExe    = "build\${PortableName}.exe"
 
 # ── Virtual environment ───────────────────────────────────────────────────────
@@ -83,6 +87,10 @@ if (-not (Get-Command pyinstaller -ErrorAction SilentlyContinue)) {
     Fail "pyinstaller not found. Install it with: pip install 'pyinstaller>=6.17'"
 }
 
+Write-Step "Installing the $Gpu GPU runtime (PyTorch $TorchVersion and DirectML)"
+
+Install-GpuRuntime -Gpu $Gpu
+
 Write-Host "   Python      : $(python --version)"      -ForegroundColor DarkGray
 Write-Host "   PyInstaller : $(pyinstaller --version)" -ForegroundColor DarkGray
 
@@ -103,24 +111,7 @@ New-Item -ItemType Directory -Path "build" -Force | Out-Null
 
 Write-Step "Running PyInstaller  (this may take several minutes)"
 
-$PyArgs = @(
-    "--name",      $PortableName,
-    "--windowed",
-    "--onefile",
-    "--icon",      "ccgen\assets\icons\CCGenUltimate.ico",
-    "--add-data",  "$ProjectRoot\ccgen\qml;ccgen\qml",
-    "--add-data",  "$ProjectRoot\ccgen\assets;ccgen\assets",
-    # Non-code data files these packages read via relative paths at runtime -
-    # PyInstaller only traces Python imports, so these need to be listed explicitly.
-    "--collect-data", "indic_transliteration",
-    "--collect-data", "faster_whisper",
-    "--distpath",  "build",
-    "--workpath",  "build\pyinstaller",
-    "--specpath",  ".",
-    "--noconfirm",
-    "--clean",
-    $Entry
-)
+$PyArgs = Get-PyInstallerArgs -Name $PortableName -Mode onefile -DistPath "build"
 
 pyinstaller @PyArgs
 
@@ -130,6 +121,14 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not (Test-Path $OutputExe)) {
     Fail "Expected portable executable not found: $OutputExe"
+}
+
+# ── Bundle self-test ──────────────────────────────────────────────────────────
+
+Write-Step "Verifying the bundle can load every engine, library, and QML module"
+
+if (-not (Test-Bundle $OutputExe)) {
+    Fail "Bundle self-test failed - a module, DLL, or data file is missing from the build. See the report above."
 }
 
 # ── Done ──────────────────────────────────────────────────────────────────────

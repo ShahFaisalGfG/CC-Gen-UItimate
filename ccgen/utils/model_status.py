@@ -1,45 +1,50 @@
-# model_status.py — checks whether a model/engine/language asset is already cached locally,
+# model_status.py - checks whether a model/engine/language asset is already cached locally,
 # so the settings UI can show a downloaded vs needs-download indicator without any network call.
 
 import logging
 from pathlib import Path
+from typing import Any, Optional
 
 import argostranslate.package
 from huggingface_hub import scan_cache_dir
 
+from ccgen.config.defaults import ModelRepos
+
 _log = logging.getLogger(__name__)
 
-_WHISPER_REPOS: dict[str, str] = {
-    "tiny": "Systran/faster-whisper-tiny",
-    "base": "Systran/faster-whisper-base",
-    "small": "Systran/faster-whisper-small",
-    "medium": "Systran/faster-whisper-medium",
-    "large-v3": "Systran/faster-whisper-large-v3",
-}
 
-_NEURAL_TOKENIZER_REPO = "Mavkif/m2m100_rup_tokenizer_both"
-_NEURAL_MODEL_REPOS: dict[tuple[str, str], str] = {
-    ("ur", "roman"): "Mavkif/m2m100_rup_ur_to_rur",
-    ("roman", "ur"): "Mavkif/m2m100_rup_rur_to_ur",
-}
-_REKHTA_REPO = "rekhtalabs/hi-2-ur-translit"
+def scan_hf_cache() -> Optional[Any]:
+    """Scan the local Hugging Face cache once; returns None when the scan fails.
+
+    Pass the result to the *_cached() helpers when checking several models in a row, since
+    each scan walks the whole cache directory.
+    """
+    try:
+        return scan_cache_dir()
+    except Exception:
+        _log.debug("Failed to scan Hugging Face cache", exc_info=True)
+        return None
 
 
-def whisper_cached(model_name: str) -> bool:
+def whisper_cached(model_name: str, cache_info: Optional[Any] = None) -> bool:
     """Return True when the given Whisper model is already cached locally."""
-    repo_id = _WHISPER_REPOS.get(model_name)
+    repo_id = ModelRepos.WHISPER.get(model_name)
     if repo_id is None:
         return False
-    return _repo_cached(repo_id)
+    return _repo_cached(repo_id, cache_info)
 
 
-def neural_translit_cached(source: str, target: str) -> bool:
+def neural_translit_cached(source: str, target: str, cache_info: Optional[Any] = None) -> bool:
     """Return True when the neural transliteration backend for this pair is already cached."""
     pair = (source, target)
-    if pair in _NEURAL_MODEL_REPOS:
-        return _repo_cached(_NEURAL_MODEL_REPOS[pair]) and _repo_cached(_NEURAL_TOKENIZER_REPO)
+    if pair in ModelRepos.M2M100:
+        cache_info = cache_info if cache_info is not None else scan_hf_cache()
+        return (
+            _repo_cached(ModelRepos.M2M100[pair], cache_info)
+            and _repo_cached(ModelRepos.M2M100_TOKENIZER, cache_info)
+        )
     if source in ("hi", "pa") and target == "ur":
-        return _repo_cached(_REKHTA_REPO)
+        return _repo_cached(ModelRepos.REKHTA, cache_info)
     return False
 
 
@@ -59,7 +64,7 @@ def translation_pair_cached(source: str, target: str) -> bool:
         return False
 
 
-def _repo_cached(repo_id: str) -> bool:
+def _repo_cached(repo_id: str, cache_info: Optional[Any] = None) -> bool:
     """Return True when `repo_id` is fully present in the local Hugging Face cache.
 
     A repo interrupted mid-download (app crash, force-close) leaves its small metadata
@@ -68,7 +73,8 @@ def _repo_cached(repo_id: str) -> bool:
     requires no leftover `.incomplete` blob anywhere under it.
     """
     try:
-        cache_info = scan_cache_dir()
+        if cache_info is None:
+            cache_info = scan_cache_dir()
         for repo in cache_info.repos:
             if repo.repo_id == repo_id:
                 return not any(Path(repo.repo_path, "blobs").glob("*.incomplete"))

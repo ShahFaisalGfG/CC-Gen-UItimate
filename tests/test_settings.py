@@ -57,6 +57,20 @@ class TestLoadSettings:
             json.dump({}, fh)
         assert load_settings() == get_default_settings()
 
+    def test_drops_options_removed_since_the_file_was_written(self, monkeypatch, tmp_path):
+        fake_path = _redirect_settings_file(monkeypatch, tmp_path)
+        with open(fake_path, "w", encoding="utf-8") as fh:
+            json.dump({
+                "translation": {"enabled": True, "target_lang": "ur"},
+                "retired_section": {"x": 1},
+                "ui": "not-a-section",
+            }, fh)
+        result = load_settings()
+        assert "enabled" not in result["translation"]
+        assert result["translation"]["target_lang"] == "ur"
+        assert "retired_section" not in result
+        assert result["ui"] == get_default_settings()["ui"]
+
 
 class TestSaveSettings:
     def test_round_trip_save_and_load(self, monkeypatch, tmp_path):

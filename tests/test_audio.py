@@ -1,80 +1,72 @@
-# test_audio.py — unit tests for ccgen.core.audio
+# test_audio.py - unit tests for ccgen.core.audio (decodes small media files generated per test)
 
-import os
-import subprocess
-from unittest.mock import MagicMock, patch
+import math
+import struct
+import wave
 
+import av
+import numpy as np
 import pytest
 
-from ccgen.core.audio import _run_ffmpeg, cleanup_temp, extract_audio
+from ccgen.config.defaults import AudioDefaults
+from ccgen.core.audio import load_audio
 
 
-class TestExtractAudio:
+def _write_wav(path, seconds: float, rate: int = 44100, channels: int = 2) -> None:
+    """Write a 440 Hz 16-bit PCM tone, so tests also cover resampling and downmixing."""
+    frames = int(seconds * rate)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        samples = (int(8000 * math.sin(2 * math.pi * 440 * i / rate)) for i in range(frames))
+        wav.writeframes(b"".join(struct.pack("<h", s) * channels for s in samples))
+
+
+def _write_silent_video(path) -> None:
+    """Write a short video file that has no audio stream."""
+    with av.open(str(path), "w", format="mp4") as container:
+        stream = container.add_stream("mpeg4", rate=10)
+        stream.width, stream.height, stream.pix_fmt = 32, 32, "yuv420p"
+        for _ in range(5):
+            frame = av.VideoFrame.from_ndarray(np.zeros((32, 32, 3), dtype=np.uint8), format="rgb24")
+            container.mux(stream.encode(frame))
+        container.mux(stream.encode())
+
+
+class TestLoadAudio:
+    def test_decodes_to_16k_mono_float32(self, tmp_path):
+        path = tmp_path / "tone.wav"
+        _write_wav(path, seconds=1.0)
+
+        audio = load_audio(str(path))
+
+        assert audio.dtype == np.float32
+        assert audio.ndim == 1
+        assert abs(audio.size - AudioDefaults.SAMPLE_RATE) < AudioDefaults.SAMPLE_RATE * 0.02
+        assert 0.1 < float(np.abs(audio).max()) <= 1.0
+
     def test_missing_input_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
-            extract_audio(str(tmp_path / "nonexistent.mp4"))
+            load_audio(str(tmp_path / "nonexistent.mp4"))
 
-    def test_ffmpeg_missing_raises(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        with patch("ccgen.core.audio.shutil.which", return_value=None):
-            with pytest.raises(RuntimeError, match="ffmpeg not found"):
-                extract_audio(str(fake))
+    def test_non_media_file_raises_readable_error(self, tmp_path):
+        path = tmp_path / "fake.mp4"
+        path.write_bytes(b"this is not a video")
 
-    def test_ffmpeg_error_raises(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        with patch("ccgen.core.audio.shutil.which", return_value="/usr/bin/ffmpeg"):
-            with patch("ccgen.core.audio._run_ffmpeg", side_effect=RuntimeError("ffmpeg error: bad file")):
-                with pytest.raises(RuntimeError, match="ffmpeg error"):
-                    extract_audio(str(fake))
+        with pytest.raises(RuntimeError, match="fake.mp4 could not be read as audio or video"):
+            load_audio(str(path))
 
-    def test_returns_output_path(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        out = tmp_path / "output.wav"
-        with patch("ccgen.core.audio.shutil.which", return_value="/usr/bin/ffmpeg"):
-            with patch("ccgen.core.audio._run_ffmpeg"):
-                result = extract_audio(str(fake), output_path=str(out))
-        assert result == str(out)
+    def test_video_without_audio_track_raises_readable_error(self, tmp_path):
+        path = tmp_path / "silent.mp4"
+        _write_silent_video(path)
 
-    def test_creates_temp_when_no_output(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        with patch("ccgen.core.audio.shutil.which", return_value="/usr/bin/ffmpeg"):
-            with patch("ccgen.core.audio._run_ffmpeg"):
-                result = extract_audio(str(fake))
-        assert result.endswith(".wav")
-        cleanup_temp(result)
+        with pytest.raises(RuntimeError, match="silent.mp4 has no audio track"):
+            load_audio(str(path))
 
+    def test_empty_audio_raises(self, tmp_path):
+        path = tmp_path / "empty.wav"
+        _write_wav(path, seconds=0)
 
-class TestRunFfmpeg:
-    def test_runs_without_visible_console_window(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        out = tmp_path / "out.wav"
-        with patch("ccgen.core.audio.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            _run_ffmpeg(str(fake), str(out))
-        _, kwargs = mock_run.call_args
-        assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
-
-    def test_nonzero_exit_raises_runtime_error_with_stderr(self, tmp_path):
-        fake = tmp_path / "video.mp4"
-        fake.write_bytes(b"fake")
-        out = tmp_path / "out.wav"
-        error = subprocess.CalledProcessError(1, ["ffmpeg"], stderr=b"invalid data found")
-        with patch("ccgen.core.audio.subprocess.run", side_effect=error):
-            with pytest.raises(RuntimeError, match="invalid data found"):
-                _run_ffmpeg(str(fake), str(out))
-
-
-class TestCleanupTemp:
-    def test_removes_existing_file(self, tmp_path):
-        f = tmp_path / "temp.wav"
-        f.write_bytes(b"data")
-        cleanup_temp(str(f))
-        assert not f.exists()
-
-    def test_missing_file_does_not_raise(self):
-        cleanup_temp("/nonexistent/path/temp.wav")
+        with pytest.raises(RuntimeError, match="empty.wav contains no audio"):
+            load_audio(str(path))

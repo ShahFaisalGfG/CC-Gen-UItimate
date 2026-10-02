@@ -6,16 +6,22 @@
     Step 2 - PyInstaller  : bundles the app into dist\CC-Gen-Ultimate\
     Step 3 - Shell DLL    : copies ccgen_shell.dll into dist\CC-Gen-Ultimate\
     Step 4 - Inno Setup   : compiles the per-user installer into build\installer\
+.PARAMETER Gpu
+    Which GPU the build's PyTorch targets: "cuda" (NVIDIA, the default) or "xpu" (Intel Arc and
+    Core Ultra; file names get an "_intel_gpu" suffix). See scripts/bundle.ps1.
 .NOTES
     Requirements: Python venv with pyinstaller>=6.17, Inno Setup 6, Visual Studio Build Tools
 #>
+
+param(
+    [ValidateSet("cuda", "xpu")] [string]$Gpu = "cuda"
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-$Entry   = "app.py"
 $IssFile = "installer\ccgenultimate_user_installer.iss"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,11 +55,12 @@ Set-Location $ProjectRoot
 # ── App metadata ──────────────────────────────────────────────────────────────
 
 . "$ScriptDir\app_meta.ps1"
+. "$ScriptDir\bundle.ps1"
 $Meta      = Get-AppMeta
 $AppName   = $Meta.AppName
 $Version   = $Meta.Version
 $DistDir   = "dist\$AppName"
-$OutputExe = "build\installer\${AppName}_${Version}_user_installer.exe"
+$OutputExe = "build\installer\${AppName}_${Version}$($GpuSuffix[$Gpu])_user_installer.exe"
 
 # ── Native C++ target ─────────────────────────────────────────────────────────
 
@@ -105,6 +112,10 @@ if (-not $Iscc) {
     Fail "Inno Setup 6 not found. Download from: https://jrsoftware.org/isinfo.php"
 }
 
+Write-Step "Installing the $Gpu GPU runtime (PyTorch $TorchVersion and DirectML)"
+
+Install-GpuRuntime -Gpu $Gpu
+
 Write-Host "   Python      : $(python --version)"      -ForegroundColor DarkGray
 Write-Host "   PyInstaller : $(pyinstaller --version)" -ForegroundColor DarkGray
 Write-Host "   ISCC        : $Iscc"                    -ForegroundColor DarkGray
@@ -126,24 +137,7 @@ New-Item -ItemType Directory -Path "build\installer" -Force | Out-Null
 
 Write-Step "Running PyInstaller  (this may take several minutes)"
 
-$PyArgs = @(
-    "--name",      $AppName,
-    "--windowed",
-    "--onedir",
-    "--icon",      "ccgen\assets\icons\CCGenUltimate.ico",
-    "--add-data",  "$ProjectRoot\ccgen\qml;ccgen\qml",
-    "--add-data",  "$ProjectRoot\ccgen\assets;ccgen\assets",
-    # Non-code data files these packages read via relative paths at runtime -
-    # PyInstaller only traces Python imports, so these need to be listed explicitly.
-    "--collect-data", "indic_transliteration",
-    "--collect-data", "faster_whisper",
-    "--distpath",  "dist",
-    "--workpath",  "build\pyinstaller",
-    "--specpath",  ".",
-    "--noconfirm",
-    "--clean",
-    $Entry
-)
+$PyArgs = Get-PyInstallerArgs -Name $AppName -Mode onedir -DistPath "dist"
 
 pyinstaller @PyArgs
 
@@ -158,6 +152,14 @@ if (-not (Test-Path $ExePath)) {
 
 $BundleMb = [math]::Round((Get-ChildItem $DistDir -Recurse | Measure-Object Length -Sum).Sum / 1MB, 1)
 Write-Host "   Bundle ready : $DistDir  ($BundleMb MB)" -ForegroundColor DarkGray
+
+# ── Bundle self-test ──────────────────────────────────────────────────────────
+
+Write-Step "Verifying the bundle can load every engine, library, and QML module"
+
+if (-not (Test-Bundle $ExePath)) {
+    Fail "Bundle self-test failed - a module, DLL, or data file is missing from the build. See the report above."
+}
 
 # ── Shell extension DLL ───────────────────────────────────────────────────────
 
@@ -180,6 +182,7 @@ Write-Host "   Compiling : $IssFile" -ForegroundColor DarkGray
     "/DMyAppVersion=$($Meta.Version)" `
     "/DMyAppPublisher=$($Meta.Publisher)" `
     "/DMyAppURL=$($Meta.Url)" `
+    "/DMyGpuSuffix=$($GpuSuffix[$Gpu])" `
     $IssFile
 if ($LASTEXITCODE -ne 0) {
     Fail "Inno Setup failed for '$IssFile' (exit $LASTEXITCODE)."

@@ -1,4 +1,4 @@
-# test_asset_registry.py — unit tests for ccgen.utils.asset_registry
+# test_asset_registry.py - unit tests for ccgen.utils.asset_registry
 
 from unittest.mock import MagicMock, patch
 
@@ -7,11 +7,20 @@ import pytest
 from ccgen.utils.asset_registry import (
     CATEGORY_TRANSLATION,
     CATEGORY_TRANSLITERATION,
+    CATEGORY_VOICES,
     CATEGORY_WHISPER,
     delete_asset,
     download_asset,
     list_assets,
 )
+from ccgen.config.capabilities import translation_asset_ids
+
+
+@pytest.fixture(autouse=True)
+def _no_local_voices():
+    """Report every voice as missing so catalog tests never depend on this machine's files."""
+    with patch("ccgen.utils.asset_registry.voice_files.engine_files_cached", return_value=False):
+        yield
 
 
 class _FakeRevision:
@@ -53,9 +62,13 @@ class TestListAssets:
         whisper = [a for a in assets if a["category"] == CATEGORY_WHISPER]
         translation = [a for a in assets if a["category"] == CATEGORY_TRANSLATION]
         translit = [a for a in assets if a["category"] == CATEGORY_TRANSLITERATION]
-        assert len(whisper) == 5
-        assert len(translation) == 9  # 10 supported targets minus the degenerate English→English
+        voices = [a for a in assets if a["category"] == CATEGORY_VOICES]
+        assert len(whisper) == 6
+        # Each of the 9 non-English targets, both to and from English.
+        assert len(translation) == 18
         assert len(translit) == 3
+        assert {a["engine"] for a in voices} == {"XTTS-v2 (voice cloning)", "Kokoro", "Piper"}
+        assert sum(a["engine"] == "Piper" for a in voices) > 50
         assert all(a["downloaded"] is False and a["size_bytes"] is None for a in assets)
 
     def test_whisper_asset_reports_approx_size_when_not_downloaded(self):
@@ -98,8 +111,10 @@ class TestListAssets:
                 ):
                     assets = list_assets()
 
-        spanish = next(a for a in assets if a["id"] == "translation:es")
+        spanish = next(a for a in assets if a["id"] == "translation:en-es")
         assert spanish["label"] == "English → Spanish"
+        back = next(a for a in assets if a["id"] == "translation:es-en")
+        assert back["label"] == "Spanish → English"
 
     def test_not_downloaded_translation_and_transliteration_show_approx_size(self):
         # Argos/HF expose no size field for uninstalled packages, so these are measured
@@ -114,7 +129,7 @@ class TestListAssets:
                 ):
                     assets = list_assets()
 
-        spanish = next(a for a in assets if a["id"] == "translation:es")
+        spanish = next(a for a in assets if a["id"] == "translation:en-es")
         assert spanish["approx_size_mb"] == 92
 
         roman_ur = next(a for a in assets if a["id"] == "transliteration:roman-ur")
@@ -138,7 +153,7 @@ class TestListAssets:
 
         by_id = {a["id"]: a for a in assets}
         assert by_id["whisper:tiny"]["engine"] == "Faster Whisper"
-        assert by_id["translation:es"]["engine"] == "Argos Translate"
+        assert by_id["translation:en-es"]["engine"] == "Argos Translate"
         assert by_id["transliteration:roman-ur"]["engine"] == "Neural (M2M100)"
         assert by_id["transliteration:ur-roman"]["engine"] == "Neural (M2M100)"
         assert by_id["transliteration:hi-ur"]["engine"] == "Neural (Rekhta)"
@@ -154,7 +169,7 @@ class TestListAssets:
             ):
                 with patch(
                     "ccgen.utils.asset_registry.model_status.neural_translit_cached",
-                    side_effect=lambda s, t: (s, t) == ("roman", "ur"),
+                    side_effect=lambda s, t, cache_info=None: (s, t) == ("roman", "ur"),
                 ):
                     with patch("ccgen.utils.asset_registry.scan_cache_dir", return_value=cache):
                         assets = list_assets()
@@ -162,6 +177,47 @@ class TestListAssets:
         roman_ur = next(a for a in assets if a["id"] == "transliteration:roman-ur")
         assert roman_ur["downloaded"] is True
         assert roman_ur["size_bytes"] == 110
+
+
+class TestTranslationAssetIds:
+    def test_english_pairs_need_one_package(self):
+        assert translation_asset_ids("en", "ur") == ["translation:en-ur"]
+        assert translation_asset_ids("ur", "en") == ["translation:ur-en"]
+
+    def test_other_pairs_need_both_legs_through_english(self):
+        assert translation_asset_ids("ur", "fr") == ["translation:ur-en", "translation:en-fr"]
+
+    def test_same_or_unknown_language_needs_nothing(self):
+        assert translation_asset_ids("en", "en") == []
+        assert translation_asset_ids("", "fr") == []
+
+
+class TestVoiceAssets:
+    def test_xtts_downloads_and_deletes_through_hf_cache(self):
+        with patch("ccgen.utils.asset_registry.voice_files.ensure_xtts") as ensure:
+            download_asset("voices:xtts")
+        ensure.assert_called_once_with(None)
+        cache = _fake_cache([_FakeRepo("coqui/XTTS-v2", revisions=[_FakeRevision("x1")])])
+        with patch("ccgen.utils.asset_registry.scan_cache_dir", return_value=cache):
+            delete_asset("voices:xtts")
+        cache.delete_revisions.assert_called_once_with("x1")
+
+    def test_piper_voice_downloads_and_removes_its_own_folder(self):
+        with patch("ccgen.utils.asset_registry.voice_files.ensure_piper") as ensure:
+            download_asset("voices:piper:ur_PK-fasih-medium")
+        assert ensure.call_args.args[0].voice_id == "ur_PK-fasih-medium"
+        with patch("ccgen.utils.asset_registry.voice_files.remove_engine_files") as remove:
+            delete_asset("voices:piper:ur_PK-fasih-medium")
+        assert remove.call_args.args[0] == "piper"
+
+    def test_kokoro_downloads_its_model(self):
+        with patch("ccgen.utils.asset_registry.voice_files.ensure_kokoro") as ensure:
+            download_asset("voices:kokoro")
+        ensure.assert_called_once_with(None)
+
+    def test_unknown_piper_voice_is_rejected(self):
+        with pytest.raises(RuntimeError, match="Unknown voice asset"):
+            download_asset("voices:piper:nope")
 
 
 class TestDownloadAsset:
@@ -173,7 +229,7 @@ class TestDownloadAsset:
 
     def test_translation_dispatches_to_install_pair(self):
         with patch("ccgen.utils.asset_registry.install_pair") as mock_install:
-            download_asset("translation:es")
+            download_asset("translation:en-es")
         mock_install.assert_called_once_with("en", "es", None, None)
 
     def test_transliteration_roman_ur_dispatches_to_neural_engine(self):
@@ -197,13 +253,13 @@ class TestDownloadAsset:
         # or not at all - the very first status message must arrive before any real work runs.
         messages = []
         with patch("ccgen.utils.asset_registry.install_pair"):
-            download_asset("translation:es", progress_cb=messages.append)
+            download_asset("translation:en-es", progress_cb=messages.append)
         assert messages == ["Downloading..."]
 
     def test_underlying_failure_wrapped_in_runtime_error(self):
         with patch("ccgen.utils.asset_registry.install_pair", side_effect=RuntimeError("no package")):
             with pytest.raises(RuntimeError, match="no package"):
-                download_asset("translation:es")
+                download_asset("translation:en-es")
 
 
 class TestDeleteAsset:
@@ -227,7 +283,7 @@ class TestDeleteAsset:
             return_value=[pkg],
         ):
             with patch("ccgen.utils.asset_registry.argostranslate.package.uninstall") as mock_uninstall:
-                delete_asset("translation:es")
+                delete_asset("translation:en-es")
         mock_uninstall.assert_called_once_with(pkg)
 
     def test_transliteration_hi_ur_deletes_rekhta_repo(self):

@@ -1,4 +1,4 @@
-# test_file_model.py — unit tests for ccgen.models.file_model.MediaFileModel
+# test_file_model.py - unit tests for ccgen.models.file_model.MediaFileModel
 
 import pytest
 from PySide6.QtCore import QCoreApplication
@@ -157,3 +157,47 @@ class TestSetStatus:
         model.setStatus(0, "done")
         index = model.index(0)
         assert model.data(index, MediaFileModel.StatusRole) == "done"
+
+
+class TestBulkOperations:
+    def test_add_scanned_skips_duplicates_in_one_insert(self, model, two_files):
+        inserts = []
+        model.rowsInserted.connect(lambda *args: inserts.append(args))
+        added = model.addScanned([(two_files[0], 1024), (two_files[1], 2048), (two_files[0], 1024)])
+        assert added == 2
+        assert len(inserts) == 1
+        assert model.addScanned([(two_files[0], 1024)]) == 0
+
+    def test_thousands_of_rows_add_and_remove_quickly(self, model, tmp_path):
+        import time
+        entries = [(str(tmp_path / f"clip{i}.mp4"), 10) for i in range(5000)]
+        start = time.perf_counter()
+        model.addScanned(entries)
+        model.selectAll()
+        model.removeSelected()
+        assert model.count == 0
+        assert time.perf_counter() - start < 3.0
+
+    def test_processing_row_is_not_removed(self, model, two_files):
+        model.addFiles(two_files)
+        model.set_run_state(two_files[0], status="processing")
+        model.clearAll()
+        assert model.getPaths() == [two_files[0]]
+
+    def test_remove_finished_keeps_other_rows(self, model, two_files):
+        model.addFiles(two_files)
+        model.set_run_state(two_files[0], status="done")
+        model.removeFinished()
+        assert model.getPaths() == [two_files[1]]
+
+    def test_runnable_paths_prefers_unfinished(self, model, two_files):
+        model.addFiles(two_files)
+        model.set_run_state(two_files[0], status="done")
+        assert model.runnable_paths() == [two_files[1]]
+        model.set_run_state(two_files[1], status="done")
+        assert model.runnable_paths() == two_files
+
+    def test_kind_role(self, model, two_files):
+        model.addFiles(two_files)
+        assert model.data(model.index(0), MediaFileModel.KindRole) == "video"
+        assert model.data(model.index(1), MediaFileModel.KindRole) == "audio"

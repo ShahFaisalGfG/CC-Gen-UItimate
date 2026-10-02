@@ -16,6 +16,7 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Log startup/shutdown and reset event-loop-bound singletons for this app lifecycle."""
     _log.info("CC-Gen-Ultimate API starting")
     assets.reset_manager()
+    jobs.reset_manager()
     yield
     _log.info("CC-Gen-Ultimate API stopping")
 

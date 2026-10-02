@@ -21,6 +21,7 @@ class TestGetOptions:
         expected_keys = {
             "models", "languages", "translation_targets",
             "translit_schemes", "translit_engines",
+            "dub_modes", "dub_languages", "voices",
         }
         assert set(data.keys()) == expected_keys
         for key in expected_keys:
@@ -55,3 +56,13 @@ class TestGetOptions:
         data = client.get("/options").json()
         codes = [item["code"] for item in data["translit_engines"]]
         assert codes == [code for _, code in TransliterationDefaults.ENGINES]
+
+    def test_dub_modes_put_voice_cloning_first_with_trade_offs(self, client):
+        modes = client.get("/options").json()["dub_modes"]
+        assert [m["code"] for m in modes] == ["xtts", "kokoro", "piper"]
+        assert all(m["hint"] for m in modes)
+
+    def test_voices_cover_urdu(self, client):
+        voices = client.get("/options").json()["voices"]
+        assert any(v["language"] == "ur" and v["engine"] == "piper" for v in voices)
+        assert set(voices[0].keys()) == {"key", "engine", "language", "label"}

@@ -1,4 +1,4 @@
-# app.py — CC-Gen-Ultimate GUI entry point
+# app.py - CC-Gen-Ultimate GUI entry point
 
 import logging
 import os
@@ -6,28 +6,35 @@ import sys
 from multiprocessing import freeze_support
 from typing import Optional
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from ccgen.api.routers.jobs import cancel_all_jobs
 from ccgen.controllers.app_ctrl import AppController
 from ccgen.controllers.assets_ctrl import AssetsController
 from ccgen.controllers.prefs_ctrl import PrefsController
-from ccgen.controllers.transcription_ctrl import TranscriptionController
+from ccgen.controllers.task_ctrl import TaskController
+from ccgen.controllers.task_tabs import (
+    DubController,
+    GenerateController,
+    TranslateController,
+    TransliterateController,
+)
+from ccgen.controllers.workflow_ctrl import WorkflowController
 from ccgen.ui.boot_thread import BootThread
 from ccgen.ui.splash_screen import SplashScreen
 from ccgen.utils.helpers import resource_path
+from ccgen.utils.logging import configure_from_settings
+from ccgen.utils.self_test import run_self_test
+from ccgen.utils.settings import load_settings
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-    stream=sys.stderr,
-)
 _log = logging.getLogger(__name__)
+_SHUTDOWN_WAIT_MS = 2000
+_SELF_TEST_FLAG = "--self-test"
 
 
 class _Startup:
@@ -35,11 +42,12 @@ class _Startup:
 
     def __init__(self, app: QApplication) -> None:
         self._app = app
-        self._input_paths = [p for p in sys.argv[1:] if os.path.isfile(p)]
+        self._input_paths = [p for p in sys.argv[1:] if os.path.exists(p)]
         self._engine: Optional[QQmlApplicationEngine] = None
         self._api_server = None
         self._app_ctrl = None
-        self._trans_ctrl = None
+        # One controller per task tab, keyed by the QML context property name.
+        self._task_ctrls: dict[str, TaskController] = {}
         self._prefs_ctrl = None
         self._assets_ctrl = None
 
@@ -67,19 +75,31 @@ class _Startup:
                 self._app.setWindowIcon(icon)
 
             app_ctrl   = AppController()
-            trans_ctrl = TranscriptionController(api_server.base_url)
+            task_ctrls: dict[str, TaskController] = {
+                "generateController": GenerateController(api_server.base_url),
+                "translateController": TranslateController(api_server.base_url),
+                "transliterateController": TransliterateController(api_server.base_url),
+                "dubController": DubController(api_server.base_url),
+                "workflowController": WorkflowController(api_server.base_url),
+            }
             prefs_ctrl = PrefsController(api_server.base_url)
             assets_ctrl = AssetsController(api_server.base_url)
             if self._input_paths:
-                trans_ctrl.addFiles(self._input_paths)
+                # Files opened with the app (e.g. from Explorer's context menu): media gets
+                # subtitles generated, subtitle files are offered for translation.
+                task_ctrls["generateController"].addFiles(self._input_paths)
+                task_ctrls["translateController"].addFiles(
+                    [p for p in self._input_paths if os.path.splitext(p)[1].lower() in TranslateController.accepted_exts]
+                )
                 _log.info("Queued %d file(s) from command line", len(self._input_paths))
 
             engine = QQmlApplicationEngine()
             ctx = engine.rootContext()
-            ctx.setContextProperty("appController",           app_ctrl)
-            ctx.setContextProperty("transcriptionController", trans_ctrl)
-            ctx.setContextProperty("prefsController",         prefs_ctrl)
-            ctx.setContextProperty("modelsController",        assets_ctrl)
+            ctx.setContextProperty("appController",    app_ctrl)
+            ctx.setContextProperty("prefsController",  prefs_ctrl)
+            ctx.setContextProperty("modelsController", assets_ctrl)
+            for name, controller in task_ctrls.items():
+                ctx.setContextProperty(name, controller)
 
             qml_dir = resource_path("ccgen/qml")
             engine.addImportPath(qml_dir)
@@ -94,14 +114,14 @@ class _Startup:
             # would leave bound QML text empty.
             self._engine = engine
             self._app_ctrl = app_ctrl
-            self._trans_ctrl = trans_ctrl
+            self._task_ctrls = task_ctrls
             self._prefs_ctrl = prefs_ctrl
             self._assets_ctrl = assets_ctrl
             root = engine.rootObjects()[0]
             self._splash.close()
             if isinstance(root, QQuickWindow):
                 root.show()
-                _log.info("Window shown — %dx%d at (%d,%d)", root.width(), root.height(), root.x(), root.y())
+                _log.info("Window shown - %dx%d at (%d,%d)", root.width(), root.height(), root.x(), root.y())
             else:
                 _log.info("Window created (non-QQuickWindow root)")
         except Exception as e:
@@ -119,9 +139,20 @@ class _Startup:
     def shutdown(self) -> None:
         """Tear down the QML scene and controllers, then stop the API server."""
         try:
+            for controller in self._task_ctrls.values():
+                controller.shutdown()
+            # The controllers' cancel requests need the event loop, which has stopped by now,
+            # so running jobs are cancelled in-process and stop at their next safe point.
+            cancel_all_jobs()
+            if self._task_ctrls:
+                # A cancelled folder scan exits within milliseconds; wait for it so its
+                # thread doesn't outlive the objects it reports to.
+                QThreadPool.globalInstance().waitForDone(_SHUTDOWN_WAIT_MS)
+            if self._assets_ctrl is not None:
+                self._assets_ctrl.close()
             self._engine = None
             self._app_ctrl = None
-            self._trans_ctrl = None
+            self._task_ctrls = {}
             self._prefs_ctrl = None
             self._assets_ctrl = None
             if self._api_server is not None:
@@ -131,8 +162,16 @@ class _Startup:
 
 
 def main() -> None:
-    """Initialise the Qt application, show the splash, and boot the app in the background."""
+    """Initialise the Qt application, show the splash, and boot the app in the background.
+
+    `--self-test [REPORT_PATH]` instead verifies the build can load everything it needs and
+    exits with 0 or 1 (used by the release workflow on the frozen bundle).
+    """
     freeze_support()
+    if _SELF_TEST_FLAG in sys.argv:
+        index = sys.argv.index(_SELF_TEST_FLAG)
+        sys.exit(run_self_test(sys.argv[index + 1] if index + 1 < len(sys.argv) else None))
+    configure_from_settings(load_settings())
     _log.info("Starting CC-Gen-Ultimate")
 
     os.environ.setdefault("QT_QPA_PLATFORM", "windows")

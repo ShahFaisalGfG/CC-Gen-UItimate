@@ -16,6 +16,10 @@
 #ifndef MyAppURL
   #define MyAppURL "https://shahfaisalgfg.github.io/shahfaisal/"
 #endif
+#ifndef MyGpuSuffix
+  ; Set by the build scripts for GPU-specific builds (e.g. "_intel_gpu"); empty for the main build.
+  #define MyGpuSuffix ""
+#endif
 #ifndef MyAppExeName
   #define MyAppExeName "CC-Gen-Ultimate.exe"
 #endif
@@ -38,7 +42,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\build\installer
-OutputBaseFilename={#MyAppName}_{#MyAppVersion}_system_installer
+OutputBaseFilename={#MyAppName}_{#MyAppVersion}{#MyGpuSuffix}_system_installer
 SetupIconFile={#IconsDir}\CCGenUltimate.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
@@ -74,6 +78,13 @@ Source: "{#IconsDir}\CCGenUltimate.ico"; DestDir: "{app}\icons"; Flags: ignoreve
 ; Documentation
 Source: "..\requirements.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "{#IconsDir}\Square150x150Logo.scale-100.png"; DestDir: "{app}\docs\icons"; Flags: ignoreversion
+
+[InstallDelete]
+; Remove the previous version's bundled runtime before copying the new one. Files a newer
+; build no longer ships (old package metadata, dropped libraries) would otherwise stay behind
+; and can break imports at startup - e.g. a leftover Pillow fragment made transformers fail.
+; Only bundled program files live in _internal; settings, logs, and models are kept.
+Type: filesandordirs; Name: "{app}\_internal"
 
 [Icons]
 ; Start Menu

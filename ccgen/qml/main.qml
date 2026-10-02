@@ -1,858 +1,393 @@
 // qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
-import QtQuick.Window
-import QtQuick.Dialogs
 import "components"
+import "pages"
 
-ApplicationWindow {
+AppWindow {
     id: mainWin
 
-    width:       820
-    height:      560
-    minimumWidth:  680
-    minimumHeight: 460
-    visible:     true
-    title: appController.appName
-    flags: Qt.FramelessWindowHint | Qt.Window
+    width: 1180
+    height: 760
+    minimumWidth: 900
+    minimumHeight: 580
+    visible: true
+    title: appController.appName + " " + appController.appVersion
 
-    Material.theme: appController && appController.currentTheme === "dark" ? Material.Dark : Material.Light
-    Material.accent: "#0078d4"
+    property var _prefsWindow: null
+    property var _modelsWindow: null
 
-    // Default Material dim reads as a washed-out/frozen window rather than a modal
-    // in front, so dialogs get an explicit dark scrim instead (consistent in both themes).
-    Overlay.modal: Rectangle { color: "#99000000" }
+    // Every tab, in order. Shortcuts (Ctrl+1...), "Send to" menus, and the About text all
+    // derive from this list, so adding a tab never means updating hard-coded indexes.
+    readonly property var tasks: [
+        { key: "generate", label: "Generate", icon: "mic", controller: generateController },
+        { key: "translate", label: "Translate", icon: "globe", controller: translateController },
+        { key: "transliterate", label: "Transliterate", icon: "characters", controller: transliterateController },
+        { key: "dub", label: "Dub", icon: "speaker", controller: dubController },
+        { key: "workflow", label: "Workflow", icon: "workflow", controller: workflowController }
+    ]
+    readonly property var currentPage: pages.children[tabs.currentIndex]
+    readonly property var currentController: mainWin.tasks[tabs.currentIndex].controller
 
-    Component.onCompleted: {
-        x = Screen.virtualX + Math.round((Screen.desktopAvailableWidth  - width)  / 2)
-        y = Screen.virtualY + Math.round((Screen.desktopAvailableHeight - height) / 2)
-    }
-
-    // quitOnLastWindowClosed is disabled app-wide (see app.py) since it can
-    // misfire while a QML window is still open, so closing the main window
-    // must quit explicitly.
+    // quitOnLastWindowClosed is disabled app-wide (see app.py) since it can misfire while a
+    // QML window is still open, so closing the main window quits explicitly.
     onClosing: Qt.quit()
 
-    // Live segment model — QML-side ListModel populated by worker signals
-    ListModel { id: segmentModel }
+    titleActions: [
+        AppButton {
+            kind: "ghost"
+            compact: true
+            text: "Models"
+            iconName: "library"
+            toolTipText: "Manage downloaded models and voices (Ctrl+M)"
+            focusPolicy: Qt.TabFocus
+            onClicked: mainWin.openModels()
+        },
+        AppButton {
+            kind: "ghost"
+            compact: true
+            text: "Preferences"
+            iconName: "settings"
+            toolTipText: "Default settings, appearance, and logs (Ctrl+,)"
+            focusPolicy: Qt.TabFocus
+            onClicked: mainWin.openPreferences()
+        },
+        AppButton {
+            kind: "ghost"
+            compact: true
+            iconName: "info"
+            toolTipText: "About " + appController.appName + " (F1)"
+            focusPolicy: Qt.TabFocus
+            onClicked: aboutDialog.open()
+        }
+    ]
+
+    // ── Windows ────────────────────────────────────────────────────────────
+
+    function openPreferences() {
+        if (!mainWin._prefsWindow) {
+            var comp = Qt.createComponent("PreferencesWindow.qml")
+            if (comp.status !== Component.Ready) { console.error(comp.errorString()); return }
+            mainWin._prefsWindow = comp.createObject(mainWin)
+            mainWin._prefsWindow.closing.connect(function() { mainWin._prefsWindow = null })
+        }
+        mainWin._prefsWindow.show()
+        mainWin._prefsWindow.raise()
+        mainWin._prefsWindow.requestActivate()
+    }
+
+    function openModels() {
+        if (!mainWin._modelsWindow) {
+            var comp = Qt.createComponent("ManageModelsWindow.qml")
+            if (comp.status !== Component.Ready) { console.error(comp.errorString()); return }
+            mainWin._modelsWindow = comp.createObject(mainWin)
+            mainWin._modelsWindow.closing.connect(function() { mainWin._modelsWindow = null })
+        }
+        mainWin._modelsWindow.show()
+        mainWin._modelsWindow.raise()
+        mainWin._modelsWindow.requestActivate()
+    }
+
+    // Hand a finished file's results to another tab, each with the language it is in.
+    function sendFiles(fromKey, toKey, sourcePath, outputs) {
+        var from = mainWin.tasks.findIndex(t => t.key === fromKey)
+        var to = mainWin.tasks.findIndex(t => t.key === toKey)
+        if (from < 0 || to < 0 || outputs.length === 0) return
+        var languages = outputs.map(path => mainWin.tasks[from].controller.outputLanguage(path))
+        mainWin.tasks[to].controller.receiveFiles(outputs, sourcePath, languages)
+        tabs.currentIndex = to
+    }
+
+    function sendTargetsFor(keys) {
+        return mainWin.tasks.filter(t => keys.indexOf(t.key) >= 0).map(t => ({ key: t.key, label: t.label + " tab" }))
+    }
+
+    // ── Keyboard shortcuts ─────────────────────────────────────────────────
+
+    Shortcut { sequences: [StandardKey.Open]; onActivated: mainWin.currentPage.openFiles() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: mainWin.currentPage.openFolder() }
+    Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter", "F5"]; onActivated: mainWin.currentController.startQueue() }
+    Shortcut { sequence: "Escape"; enabled: mainWin.currentController.busy; onActivated: mainWin.currentController.cancelQueue() }
+    Shortcut { sequence: "Ctrl+,"; onActivated: mainWin.openPreferences() }
+    Shortcut { sequence: "Ctrl+M"; onActivated: mainWin.openModels() }
+    Shortcut { sequence: "F1"; onActivated: aboutDialog.open() }
+    Instantiator {
+        model: mainWin.tasks.length
+        delegate: Shortcut {
+            required property int index
+            sequence: "Ctrl+" + (index + 1)
+            onActivated: tabs.currentIndex = index
+        }
+    }
 
     Connections {
-        target: transcriptionController
-
-        function onSegmentAdded(id, start, end, text) {
-            for (var i = 0; i < segmentModel.count; i++) {
-                if (segmentModel.get(i).segId === id) {
-                    segmentModel.setProperty(i, "segText", text)
-                    return
-                }
-            }
-            segmentModel.append({ segId: id, segStart: start, segEnd: end, segText: text })
-        }
-
-        function onOperationFinished(success, errorMsg, outputFiles) {
-            prefsController.refreshModelStatus()
-            if (!success) {
-                statusLabel.text = "✗ " + (errorMsg || "Unknown error")
-            } else {
-                var dirs = []
-                for (var i = 0; i < outputFiles.length; i++) {
-                    var d = outputFiles[i].toString().replace(/[^\\/]+$/, "")
-                    if (dirs.indexOf(d) < 0) dirs.push(d)
-                }
-                statusLabel.text = "✓ " + outputFiles.length + " file(s) written"
-                completionDialog.fileCount  = outputFiles.length
-                completionDialog.outputDirs = dirs
-                completionDialog.open()
-            }
-        }
-
-        function onStatusChanged(msg) {
-            statusLabel.text = msg
-        }
-
-        function onBusyChanged() {
-            if (!transcriptionController.busy) {
-                progressBar.value = 0
-                segCountLabel.text = ""
-            }
-        }
-
-        function onProgressChanged(done, total) {
-            segCountLabel.text = total > 0 ? Math.round(100 * done / total) + "%" : ""
-            progressBar.value = total > 0 ? done / total : 0
-        }
-
-        function onDefaultsLoaded() {
-            applyDefaults()
+        target: prefsController
+        function onSaveFinished(success, error) {
+            if (!success) return
+            for (var i = 0; i < mainWin.tasks.length; i++) mainWin.tasks[i].controller.reloadDefaults()
         }
     }
 
-    // Seed settings-panel widgets from persisted defaults once fetched at startup
-    function applyDefaults() {
-        var models = prefsController.modelOptions
-        var mIdx = models.indexOf(transcriptionController.modelName)
-        modelCombo.currentIndex = mIdx >= 0 ? mIdx : 0
-
-        var langs = prefsController.languageOptions
-        for (var i = 0; i < langs.length; i++) {
-            if (langs[i].code === transcriptionController.language) {
-                langCombo.currentIndex = i
-                break
-            }
-        }
-
-        translateSwitch.checked = transcriptionController.translateEnabled
-        targetLangCombo.currentIndex = indexOfCode(
-            prefsController.targetOptions, transcriptionController.targetLang, 0)
-
-        translitSwitch.checked = transcriptionController.transliterateEnabled
-        translitSrcCombo.currentIndex = indexOfCode(
-            prefsController.translitSchemeOptions, transcriptionController.translitSource, 0)
-        translitTgtCombo.currentIndex = indexOfCode(
-            prefsController.translitSchemeOptions, transcriptionController.translitTarget, 1)
-        translitEngineCombo.currentIndex = indexOfCode(
-            prefsController.translitEngineOptions, transcriptionController.translitEngine, 0)
-
-        srtCheck.checked = transcriptionController.emitSrt
-        vttCheck.checked = transcriptionController.emitVtt
-        lrcCheck.checked = transcriptionController.emitLrc
-        assCheck.checked = transcriptionController.emitAss
-        sbvCheck.checked = transcriptionController.emitSbv
-    }
-
-    function indexOfCode(options, code, fallback) {
-        for (var i = 0; i < options.length; i++)
-            if (options[i].code === code) return i
-        return fallback
-    }
-
-    // Downloaded/needs-download indicator maps, keyed by the label shown in each combo box
-    function targetDownloadStatus() {
-        var status = {}
-        var opts = prefsController.targetOptions
-        for (var i = 0; i < opts.length; i++)
-            status[opts[i].label] = prefsController.isTranslationReady(transcriptionController.language, opts[i].code)
-        return status
-    }
-
-    function engineDownloadStatus() {
-        var status = {}
-        var opts = prefsController.translitEngineOptions
-        for (var i = 0; i < opts.length; i++) {
-            status[opts[i].label] = opts[i].code === "neural"
-                ? prefsController.isNeuralReady(transcriptionController.translitSource, transcriptionController.translitTarget)
-                : true
-        }
-        return status
-    }
-
-    // File-picker dialog
-    FileDialog {
-        id: filePicker
-        title: "Add Media Files"
-        nameFilters: [
-            "Supported files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts *.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma *.srt *.vtt *.lrc *.ass *.ssa *.sbv)",
-            "Video files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts)",
-            "Audio files (*.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma)",
-            "Subtitle files (*.srt *.vtt *.lrc *.ass *.ssa *.sbv)",
-            "All files (*)"
-        ]
-        fileMode: FileDialog.OpenFiles
-        onAccepted: transcriptionController.addFiles(selectedFiles)
-    }
-
-    // Folder-picker dialog
-    FolderDialog {
-        id: folderPicker
-        title: "Add All Media Files from Folder"
-        onAccepted: transcriptionController.addFolder(selectedFolder.toString())
-    }
-
-    // ── Background ─────────────────────────────────────────────────────────
-    Rectangle {
-        anchors.fill: parent
-        color: appController.colorBackground
-        border.color: appController.colorDivider
-        border.width: 1
-    }
+    // ── Layout ─────────────────────────────────────────────────────────────
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ── Title bar ───────────────────────────────────────────────────
-        TitleBar {
+        TabBar {
+            id: tabs
+            objectName: "taskTabs"
             Layout.fillWidth: true
-            window: mainWin
-            title: appController.appName + " " + appController.appVersion
-            showMaximize: true
-        }
-
-        // ── Two-panel body ──────────────────────────────────────────────
-        Row {
-            Layout.fillWidth:  true
-            Layout.fillHeight: true
-
-            // ── Left panel — file list ──────────────────────────────────
-            Rectangle {
-                width:  260
-                height: parent.height
-                color: appController.colorPanel
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 0
-                    spacing: 0
-
-                    // Panel header toolbar
-                    Rectangle {
-                        Layout.fillWidth:       true
-                        Layout.preferredHeight: 36
-                        color: appController.colorBackground
-
-                        RowLayout {
-                            anchors.fill:        parent
-                            anchors.leftMargin:  10
-                            anchors.rightMargin:  4
-                            spacing: 2
-
-                            Text {
-                                text: "Files (" + transcriptionController.fileModel.count + ")"
-                                font.pixelSize: 11
-                                font.weight:    Font.Bold
-                                color: appController.colorTextSecondary
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            PillButton {
-                                label: "+ Files"
-                                activeColor: Material.accent
-                                onClicked: filePicker.open()
-                            }
-                            PillButton {
-                                label: "+ Folder"
-                                activeColor: Material.accent
-                                onClicked: folderPicker.open()
-                            }
-                            PillButton {
-                                label: "Select All"
-                                enabled: transcriptionController.fileModel.count > 0
-                                activeColor: Material.theme === Material.Dark ? "#cccccc" : "#444444"
-                                onClicked: transcriptionController.fileModel.selectAll()
-                            }
-                            PillButton {
-                                label: "Remove"
-                                enabled: transcriptionController.fileModel.selectedCount > 0
-                                activeColor: appController.colorDanger
-                                hoverTint: Qt.rgba(0.91, 0.07, 0.14, 0.08)
-                                onClicked: transcriptionController.fileModel.removeSelected()
-                            }
-                        }
-                    }
-
-                    // File list component
-                    FileList {
-                        Layout.fillWidth:  true
-                        Layout.fillHeight: true
-                        onEmptyPanelClicked: filePicker.open()
-                    }
-                }
-            }
-
-            // ── Vertical divider ────────────────────────────────────────
-            Rectangle {
-                width:  1
-                height: parent.height
-                color: appController.colorDivider
-            }
-
-            // ── Right panel — settings / output ─────────────────────────
-            Item {
-                width:  parent.width - 261
-                height: parent.height
-
-                StackLayout {
-                    anchors.fill: parent
-                    currentIndex: transcriptionController.busy ? 1 : 0
-
-                    // ── Page 0: Settings (idle) ────────────────────────
-                    Flickable {
-                        contentHeight: settingsCol.implicitHeight + 24
-                        clip: true
-
-                        ColumnLayout {
-                            id: settingsCol
-                            anchors.left:    parent.left
-                            anchors.right:   parent.right
-                            anchors.margins: 20
-                            spacing: 12
-
-                            Item { implicitHeight: 4 }
-
-                            // Model selector
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: "Model"
-                                    font.pixelSize: 12
-                                    color: Material.foreground
-                                    Layout.preferredWidth: 110
-                                }
-                                StyledComboBox {
-                                    id: modelCombo
-                                    Layout.fillWidth:       true
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize:         12
-                                    model: prefsController.modelOptions
-                                    downloadStatus: prefsController.modelStatus
-                                    Component.onCompleted: {
-                                        var idx = model.indexOf("base")
-                                        currentIndex = idx >= 0 ? idx : 0
-                                    }
-                                    onCurrentIndexChanged:
-                                        transcriptionController.setModelName(currentText)
-                                }
-                            }
-
-                            // Language selector
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: "Language"
-                                    font.pixelSize: 12
-                                    color: Material.foreground
-                                    Layout.preferredWidth: 110
-                                }
-                                StyledComboBox {
-                                    id: langCombo
-                                    Layout.fillWidth:       true
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize:         12
-                                    model: prefsController.languageOptions.map(o => o.label)
-                                    currentIndex: 0
-                                    onCurrentIndexChanged: {
-                                        var opts = prefsController.languageOptions
-                                        if (currentIndex < opts.length)
-                                            transcriptionController.setLanguage(opts[currentIndex].code)
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth:       true
-                                Layout.preferredHeight: 1
-                                color: appController.colorDivider
-                            }
-
-                            // Translate toggle + target lang
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: "Translate"
-                                    font.pixelSize: 12
-                                    color: Material.foreground
-                                    Layout.preferredWidth: 110
-                                }
-                                Switch {
-                                    id: translateSwitch
-                                    scale: 0.85  // qmllint disable missing-property
-                                    checked: false
-                                    onCheckedChanged: transcriptionController.setTranslate(checked)
-                                }
-                                StyledComboBox {
-                                    id: targetLangCombo
-                                    Layout.fillWidth:       true
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize:         12
-                                    visible: translateSwitch.checked
-                                    model: prefsController.targetOptions.map(o => o.label)
-                                    downloadStatus: targetDownloadStatus()
-                                    currentIndex: {
-                                        var opts = prefsController.targetOptions
-                                        for (var i = 0; i < opts.length; i++)
-                                            if (opts[i].code === "ur") return i
-                                        return 0
-                                    }
-                                    onCurrentIndexChanged: {
-                                        var opts = prefsController.targetOptions
-                                        if (currentIndex < opts.length)
-                                            transcriptionController.setTargetLang(opts[currentIndex].code)
-                                    }
-                                }
-                            }
-
-                            // Transliterate toggle + scheme selectors
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: "Transliterate"
-                                    font.pixelSize: 12
-                                    color: Material.foreground
-                                    Layout.preferredWidth: 110
-                                }
-                                Switch {
-                                    id: translitSwitch
-                                    scale: 0.85  // qmllint disable missing-property
-                                    checked: false
-                                    onCheckedChanged: transcriptionController.setTransliterate(checked)
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    visible: translitSwitch.checked
-
-                                    StyledComboBox {
-                                        id: translitSrcCombo
-                                        Layout.fillWidth:       true
-                                        Layout.preferredHeight: 32
-                                        font.pixelSize: 12
-                                        model: prefsController.translitSchemeOptions.map(o => o.label)
-                                        currentIndex: 0
-                                        onCurrentIndexChanged: {
-                                            var opts = prefsController.translitSchemeOptions
-                                            if (currentIndex < opts.length)
-                                                transcriptionController.setTranslitSource(opts[currentIndex].code)
-                                        }
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignVCenter
-                                        text: "→"
-                                        font.pixelSize: 12
-                                        color: Material.foreground
-                                    }
-                                    StyledComboBox {
-                                        id: translitTgtCombo
-                                        Layout.fillWidth:       true
-                                        Layout.preferredHeight: 32
-                                        font.pixelSize: 12
-                                        model: prefsController.translitSchemeOptions.map(o => o.label)
-                                        currentIndex: {
-                                            var opts = prefsController.translitSchemeOptions
-                                            for (var i = 0; i < opts.length; i++)
-                                                if (opts[i].code === "ur") return i
-                                            return 1
-                                        }
-                                        onCurrentIndexChanged: {
-                                            var opts = prefsController.translitSchemeOptions
-                                            if (currentIndex < opts.length)
-                                                transcriptionController.setTranslitTarget(opts[currentIndex].code)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Transliteration engine (rule-based / neural)
-                            RowLayout {
-                                Layout.fillWidth: true
-                                visible: translitSwitch.checked
-                                Item { Layout.preferredWidth: 110 }
-                                Text {
-                                    text: "Engine"
-                                    font.pixelSize: 11
-                                    color: appController.colorTextSecondary
-                                }
-                                StyledComboBox {
-                                    id: translitEngineCombo
-                                    Layout.fillWidth:       true
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize: 12
-                                    model: prefsController.translitEngineOptions.map(o => o.label)
-                                    downloadStatus: engineDownloadStatus()
-                                    currentIndex: 0
-                                    onCurrentIndexChanged: {
-                                        var opts = prefsController.translitEngineOptions
-                                        if (currentIndex < opts.length)
-                                            transcriptionController.setTranslitEngine(opts[currentIndex].code)
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth:       true
-                                Layout.preferredHeight: 1
-                                color: appController.colorDivider
-                            }
-
-                            // Output format checkboxes
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: "Output"
-                                    font.pixelSize: 12
-                                    color: Material.foreground
-                                    Layout.preferredWidth: 110
-                                    Layout.alignment: Qt.AlignTop
-                                }
-                                // Flow wraps onto a second line instead of overflowing/clipping
-                                // when the window is narrow and all five checkboxes don't fit.
-                                Flow {
-                                    Layout.fillWidth: true
-                                    spacing: 4
-                                    CheckBox {
-                                        id: srtCheck
-                                        text: "SRT"
-                                        font.pixelSize: 12
-                                        checked: true
-                                        onCheckedChanged: transcriptionController.setEmitSrt(checked)
-                                    }
-                                    CheckBox {
-                                        id: vttCheck
-                                        text: "VTT"
-                                        font.pixelSize: 12
-                                        checked: false
-                                        onCheckedChanged: transcriptionController.setEmitVtt(checked)
-                                    }
-                                    CheckBox {
-                                        id: lrcCheck
-                                        text: "LRC"
-                                        font.pixelSize: 12
-                                        checked: false
-                                        onCheckedChanged: transcriptionController.setEmitLrc(checked)
-                                    }
-                                    CheckBox {
-                                        id: assCheck
-                                        text: "ASS"
-                                        font.pixelSize: 12
-                                        checked: false
-                                        onCheckedChanged: transcriptionController.setEmitAss(checked)
-                                    }
-                                    CheckBox {
-                                        id: sbvCheck
-                                        text: "SBV"
-                                        font.pixelSize: 12
-                                        checked: false
-                                        onCheckedChanged: transcriptionController.setEmitSbv(checked)
-                                    }
-                                }
-                            }
-
-                            Item { Layout.fillHeight: true; implicitHeight: 8 }
-
-                            // Status bar
-                            Text {
-                                id: statusLabel
-                                Layout.fillWidth: true
-                                text: ""
-                                font.pixelSize: 11
-                                color: appController.colorTextSecondary
-                                wrapMode: Text.WordWrap
-                                visible: text.length > 0
-                            }
-
-                            // Action buttons
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-
-                                Button {
-                                    text: "▶  Start"
-                                    highlighted: true
-                                    font.pixelSize: 12
-                                    Layout.preferredHeight: 36
-                                    enabled: transcriptionController.fileModel.count > 0
-                                    onClicked: {
-                                        var paths = transcriptionController.fileModel.getPaths()
-                                        if (paths.length > 0) {
-                                            segmentModel.clear()
-                                            statusLabel.text = ""
-                                            transcriptionController.startProcessing(paths[0])
-                                        }
-                                    }
-                                }
-
-                                Button {
-                                    text: "📦  Manage Models"
-                                    flat: true
-                                    font.pixelSize: 12
-                                    Layout.preferredHeight: 36
-                                    onClicked: {
-                                        var comp = Qt.createComponent("ManageModelsWindow.qml")
-                                        if (comp.status === Component.Ready) {
-                                            var win = comp.createObject(mainWin)
-                                            if (win) win.show()  // qmllint disable missing-property
-                                        }
-                                    }
-                                }
-
-                                Button {
-                                    text: "⚙  Preferences"
-                                    flat: true
-                                    font.pixelSize: 12
-                                    Layout.preferredHeight: 36
-                                    onClicked: {
-                                        var comp = Qt.createComponent("PreferencesWindow.qml")
-                                        if (comp.status === Component.Ready) {
-                                            var win = comp.createObject(mainWin)
-                                            if (win) win.show()  // qmllint disable missing-property
-                                        }
-                                    }
-                                }
-
-                                Button {
-                                    text: "ℹ  About"
-                                    flat: true
-                                    font.pixelSize: 12
-                                    Layout.preferredHeight: 36
-                                    onClicked: aboutDialog.open()
-                                }
-                            }
-
-                            Item { implicitHeight: 8 }
-                        }
-                    }
-
-                    // ── Page 1: Processing ──────────────────────────────
-                    ColumnLayout {
-                        spacing: 0
-
-                        // Processing header
-                        ColumnLayout {
-                            Layout.fillWidth:  true
-                            Layout.margins: 16
-                            spacing: 8
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text {
-                                    text: transcriptionController.fileModel.count > 0
-                                        ? transcriptionController.fileModel.getPaths()[0].split("/").pop().split("\\").pop()
-                                        : ""
-                                    font.pixelSize: 12
-                                    font.weight:    Font.Medium
-                                    color: Material.foreground
-                                    elide: Text.ElideMiddle
-                                    Layout.fillWidth: true
-                                }
-                                Text {
-                                    id: segCountLabel
-                                    text: ""
-                                    font.pixelSize: 11
-                                    color: appController.colorTextSecondary
-                                }
-                            }
-
-                            ProgressBar {
-                                id: progressBar
-                                Layout.fillWidth: true
-                                value: 0
-                                indeterminate: transcriptionController.busy && value === 0
-                            }
-
-                            Text {
-                                id: procStatusLabel
-                                text: statusLabel.text
-                                font.pixelSize: 11
-                                color: appController.colorTextSecondary
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth:       true
-                            Layout.preferredHeight: 1
-                            color: appController.colorDivider
-                        }
-
-                        // Live segment list
-                        ListView {
-                            id: segList
-                            Layout.fillWidth:  true
-                            Layout.fillHeight: true
-                            model: segmentModel
-                            clip: true
-                            spacing: 0
-
-                            delegate: SegmentItem {
-                                width: segList.width
-                            }
-
-                            onCountChanged: segList.positionViewAtEnd()
-
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth:       true
-                            Layout.preferredHeight: 1
-                            color: appController.colorDivider
-                        }
-
-                        // Cancel button
-                        Button {
-                            Layout.fillWidth:       true
-                            Layout.margins:         12
-                            Layout.preferredHeight: 36
-                            text: "Cancel"
-                            font.pixelSize: 12
-                            Material.foreground: appController.colorDanger
-                            onClicked: transcriptionController.cancelProcessing()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Full-window drop area (z below content)
-    DropArea {
-        anchors.fill: parent
-        z: -1
-        onDropped: function(drop) {
-            if (drop.hasUrls)
-                transcriptionController.addFiles(drop.urls)
-        }
-    }
-
-    // Resize grip
-    Rectangle {
-        id: resizeGrip
-        width: 14; height: 14
-        anchors.right:  parent.right
-        anchors.bottom: parent.bottom
-        color: "transparent"
-
-        Text {
-            anchors.centerIn: parent
-            text: "⌟"
-            font.pixelSize: 14
-            color: Material.theme === Material.Dark ? "#555555" : "#aaaaaa"
-        }
-
-        DragHandler {
-            target: null
-            onActiveChanged: if (active) mainWin.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
-        }
-    }
-
-    // Completion dialog
-    Dialog {
-        id: completionDialog
-        title: "Processing Complete"
-        modal: true
-        standardButtons: Dialog.Ok
-        anchors.centerIn: parent
-
-        property int fileCount:  0
-        property var outputDirs: []
-
-        ColumnLayout {
-            spacing: 8
-
-            Text {
-                text: "✓ " + completionDialog.fileCount + " subtitle file(s) written."
-                font.pixelSize: 13
-                font.weight:    Font.Medium
-                color: appController.colorSuccess
-                Layout.preferredWidth: 360
-                wrapMode: Text.WordWrap
-            }
-
-            Text {
-                text: completionDialog.outputDirs.length > 1 ? "Output folders:" : "Output folder:"
-                font.pixelSize: 11
-                color: Material.foreground
-            }
+            Layout.leftMargin: Theme.spaceLg
+            Layout.topMargin: Theme.spaceSm
+            background: Item {}
 
             Repeater {
-                model: completionDialog.outputDirs
+                model: mainWin.tasks
+                delegate: TabButton {
+                    id: tabButton
+                    required property var modelData
+                    required property int index
+                    width: implicitWidth + 28
+                    font.pixelSize: Theme.fontBody
+                    Accessible.name: modelData.label + (modelData.controller.busy ? ", running" : "")
+                    ToolTip.visible: hovered
+                    ToolTip.text: modelData.label + " (Ctrl+" + (index + 1) + ")"
+                    ToolTip.delay: 600
 
-                delegate: Rectangle {
-                    Layout.fillWidth:       true
-                    Layout.preferredHeight: 36
-                    Layout.preferredWidth:  360
-                    radius: 4
-                    color: dirMouse.containsMouse
-                        ? (Material.theme === Material.Dark ? "#1a3a5c" : "#e3f2fd")
-                        : (Material.theme === Material.Dark ? "#2a2a2a" : "#f5f5f5")
-                    border.color: dirMouse.containsMouse ? Material.accent
-                        : (Material.theme === Material.Dark ? "#444444" : "#dddddd")
-                    border.width: 1
-
-                    Behavior on color { ColorAnimation { duration: 80 } }
-
-                    RowLayout {
-                        anchors.fill:    parent
-                        anchors.margins: 8
-                        spacing: 6
-
-                        Text {
-                            text: "📂"
-                            font.pixelSize: 13
+                    contentItem: RowLayout {
+                        spacing: Theme.spaceSm
+                        Icon {
+                            name: tabButton.modelData.icon
+                            size: 14
+                            color: tabButton.checked ? Theme.accent : Theme.textMuted
                         }
                         Text {
-                            Layout.fillWidth: true
-                            text: modelData
-                            font.pixelSize: 11
-                            font.family:    "Consolas"
-                            color: dirMouse.containsMouse ? Material.accent : Material.foreground
-                            elide: Text.ElideMiddle
-                            verticalAlignment: Text.AlignVCenter
-                            Behavior on color { ColorAnimation { duration: 80 } }
+                            text: tabButton.modelData.label
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
+                            color: tabButton.checked ? Theme.text : Theme.textMuted
                         }
-                        Text {
-                            text: "↗"
-                            font.pixelSize: 10
-                            color: Material.accent
-                            visible: dirMouse.containsMouse
+                        BusyIndicator {
+                            visible: tabButton.modelData.controller.busy
+                            running: visible
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            padding: 0
+                            Accessible.ignored: true
                         }
                     }
+                }
+            }
+        }
 
-                    MouseArea {
-                        id: dirMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape:  Qt.PointingHandCursor
-                        onClicked:    Qt.openUrlExternally("file:///" + modelData.replace(/\\/g, "/"))
-                    }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+
+        StackLayout {
+            id: pages
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabs.currentIndex
+
+            TaskPage {
+                controller: generateController
+                firstRunSteps: [
+                    "Add the videos or audio you want subtitles for.",
+                    "Check the model, language, and formats in Settings.",
+                    "Press Start (Ctrl+Enter). Send the results to Translate or Dub from the queue menu."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "transliterate", "dub"])
+                emptyResultsText: "Subtitles appear here as each file is transcribed."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("generate", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                GenerateSettings {
+                    Layout.fillWidth: true
+                    options: generateController.options
+                    onOptionChanged: (key, value) => generateController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: generateController.options
+                    namingExample: "movie.srt"
+                    onOptionChanged: (key, value) => generateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => generateController.setFormat(code, enabled)
+                }
+            }
+
+            TaskPage {
+                controller: translateController
+                firstRunSteps: [
+                    "Add subtitle files, or send them here from the Generate tab.",
+                    "Choose the language to translate into.",
+                    "Press Start (Ctrl+Enter)."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["transliterate", "dub"])
+                emptyResultsText: "Each line and its translation appear here."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("translate", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                TranslateSettings {
+                    Layout.fillWidth: true
+                    options: translateController.options
+                    onOptionChanged: (key, value) => translateController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: translateController.options
+                    namingExample: "movie_ur.srt"
+                    onOptionChanged: (key, value) => translateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => translateController.setFormat(code, enabled)
+                }
+            }
+
+            TaskPage {
+                controller: transliterateController
+                firstRunSteps: [
+                    "Add subtitle files, or send them here from another tab.",
+                    "Choose the scripts to convert between.",
+                    "Press Start (Ctrl+Enter)."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "dub"])
+                emptyResultsText: "Each line and its new script appear here."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("transliterate", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                TransliterateSettings {
+                    Layout.fillWidth: true
+                    options: transliterateController.options
+                    onOptionChanged: (key, value) => transliterateController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: transliterateController.options
+                    namingExample: "movie_tr_ur_roman.srt"
+                    onOptionChanged: (key, value) => transliterateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => transliterateController.setFormat(code, enabled)
+                }
+            }
+
+            TaskPage {
+                controller: dubController
+                allowCompanion: true
+                firstRunSteps: [
+                    "Add a video together with the subtitle to speak (movie.mp4 and movie_es.srt pair up), or send a translation here.",
+                    "Choose the voices. Voice cloning keeps each speaker's own voice.",
+                    "Press Start (Ctrl+Enter). The dub is added as a new audio track."
+                ]
+                emptyResultsText: "The lines being spoken appear here."
+                onNotice: message => toast.show(message)
+
+                DubSettings {
+                    Layout.fillWidth: true
+                    options: dubController.options
+                    onOptionChanged: (key, value) => dubController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: dubController.options
+                    showFormats: false
+                    namingExample: "movie_dub_es.mkv"
+                    onOptionChanged: (key, value) => dubController.setOption(key, value)
+                }
+            }
+
+            TaskPage {
+                controller: workflowController
+                firstRunSteps: [
+                    "Add videos, audio, or subtitle files.",
+                    "Build the steps in Settings, e.g. Generate, Translate, then Dub.",
+                    "Press Start (Ctrl+Enter). Every file runs through every step."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "transliterate", "dub"])
+                emptyResultsText: "Lines from every step appear here as they are made."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("workflow", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                WorkflowEditor {
+                    Layout.fillWidth: true
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: workflowController.options
+                    namingExample: "movie.srt, movie_ur.srt, movie_dub_ur.mkv"
+                    onOptionChanged: (key, value) => workflowController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => workflowController.setFormat(code, enabled)
                 }
             }
         }
     }
 
-    // About dialog
+    Toast {
+        id: toast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 88
+        z: 50
+    }
+
+    // ── About ──────────────────────────────────────────────────────────────
+
     Dialog {
         id: aboutDialog
         title: "About " + appController.appName
         modal: true
-        standardButtons: Dialog.Ok
+        standardButtons: Dialog.Close
         anchors.centerIn: parent
+        width: Math.min(480, mainWin.width - 48)
 
-        RowLayout {
-            spacing: 16
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: Theme.spaceMd
 
-            Image {
-                source: "../assets/icons/Square44x44Logo.targetsize-48.png"
-                Layout.preferredWidth:  48
-                Layout.preferredHeight: 48
-                Layout.alignment: Qt.AlignTop
-                fillMode: Image.PreserveAspectFit
-                smooth: true
+            RowLayout {
+                spacing: Theme.spaceLg
+                Image {
+                    source: "../assets/icons/Square44x44Logo.targetsize-48.png"
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    fillMode: Image.PreserveAspectFit
+                    Accessible.ignored: true
+                }
+                ColumnLayout {
+                    spacing: 2
+                    Text {
+                        text: appController.appName + " " + appController.appVersion
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSubtitle
+                        font.weight: Font.DemiBold
+                        color: Theme.text
+                    }
+                    Text {
+                        text: "By " + appController.appAuthor
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                        color: Theme.textMuted
+                    }
+                }
             }
-
-            ColumnLayout {
-                spacing: 6
-                Text {
-                    text: appController.appName + " " + appController.appVersion
-                    font.pixelSize: 14
-                    font.weight: Font.Bold
-                    color: Material.foreground
-                }
-                Text {
-                    text: appController.appDescription
-                    font.pixelSize: 12
-                    color: Material.foreground
-                    wrapMode: Text.WordWrap
-                    Layout.preferredWidth: 280
-                }
-                Text {
-                    text: "By " + appController.appAuthor
-                    font.pixelSize: 11
-                    color: appController.colorTextSecondary
-                }
+            Text {
+                Layout.fillWidth: true
+                text: appController.appDescription + ". Everything runs on this computer; nothing is uploaded."
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                color: Theme.text
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                Layout.fillWidth: true
+                text: "Shortcuts: Ctrl+O add files, Ctrl+Shift+O add folder, Ctrl+Enter start, Esc cancel, "
+                    + "Ctrl+, preferences, Ctrl+M models, Ctrl+1 to Ctrl+" + mainWin.tasks.length + " switch tabs ("
+                    + mainWin.tasks.map(t => t.label).join(", ") + ")."
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
             }
         }
     }

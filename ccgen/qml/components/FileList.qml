@@ -1,166 +1,331 @@
 pragma ComponentBehavior: Bound
-// qmllint disable unqualified import
+
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-Item {
-    id: fileListRoot
+// The file queue: a virtualized list (fast with thousands of rows), full keyboard support,
+// one shared context menu, drag-and-drop of files and folders, and an empty-state prompt.
+//
+// Keys: Up/Down move, Shift+Up/Down extend, Space toggles, Ctrl+A selects all, Delete removes,
+// Menu or Shift+F10 opens the context menu for the current row.
+FocusScope {
+    id: root
+
+    required property var fileModel
+    property bool scanning: false
+    property int scanFound: 0
+    // What the empty queue explains, one step per line, for this tab.
+    property var firstRunSteps: []
+    // Tabs a finished file's outputs can be handed to: [{ key, label }].
+    property var sendTargets: []
+    // True on the Dub tab, where a media row can be paired with the subtitle it speaks.
+    property bool allowCompanion: false
+
+    signal addFilesRequested()
+    signal addFolderRequested()
+    signal filesDropped(var urls)
+    signal revealRequested(string path)
+    signal stopScanRequested()
+    signal clearRequested()
+    signal sendRequested(string target, string path, var outputs)
+    signal companionRequested(int row)
 
     property int _anchor: -1
-    property int _cursor: -1
 
-    signal emptyPanelClicked()
-
-    function handleClick(idx, mods) {
-        try {
-            if (mods & Qt.ShiftModifier) {
-                if (_anchor < 0) _anchor = idx
-                transcriptionController.fileModel.selectRange(_anchor, idx)
-                _cursor = idx
-            } else if (mods & Qt.ControlModifier) {
-                transcriptionController.fileModel.toggleSelection(idx)
-                _anchor = idx
-                _cursor = idx
-            } else {
-                transcriptionController.fileModel.setSingle(idx)
-                _anchor = idx
-                _cursor = idx
-            }
-            listView.forceActiveFocus()
-        } catch(e) {}
+    function _click(index, modifiers) {
+        if (modifiers & Qt.ShiftModifier) {
+            if (root._anchor < 0) root._anchor = index
+            root.fileModel.selectRange(root._anchor, index)
+        } else if (modifiers & Qt.ControlModifier) {
+            root.fileModel.toggleSelection(index)
+            root._anchor = index
+        } else {
+            root.fileModel.setSingle(index)
+            root._anchor = index
+        }
+        listView.currentIndex = index
+        listView.forceActiveFocus()
     }
 
-    // Empty-state placeholder
-    Rectangle {
+    function _openMenu(index) {
+        if (index < 0) return
+        var item = listView.itemAtIndex(index) as FileItem
+        if (!item || !item.selected)
+            root._click(index, Qt.NoModifier)
+        contextMenu.row = index
+        contextMenu.info = root.fileModel.rowAt(index)
+        contextMenu.popup()
+    }
+
+    // Empty state
+    ColumnLayout {
         anchors.centerIn: parent
-        width:  Math.min(parent.width * 0.82, 320)
-        height: 130
-        radius: 12
-        visible: transcriptionController.fileModel.count === 0
-        color:        appController.colorPanel
-        border.color: appController.colorDivider
-        border.width: 1
+        width: Math.min(parent.width - 2 * Theme.spaceXl, 320)
+        spacing: Theme.spaceMd
+        visible: root.fileModel.count === 0 && !root.scanning
 
-        ColumnLayout {
-            anchors.centerIn: parent
-            spacing: 6
-
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: "🎬"
-                font.pixelSize: 32
+        Rectangle {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 64
+            Layout.preferredHeight: 64
+            radius: 32
+            color: Theme.accentSoft
+            Icon { anchors.centerIn: parent; name: "captions"; size: 28; color: Theme.accent }
+        }
+        Text {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: "Add files to get started"
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSubtitle
+            font.weight: Font.DemiBold
+            color: Theme.text
+            Accessible.role: Accessible.Heading
+        }
+        Text {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: "Drop videos, audio, subtitle files, or whole folders here."
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontBody
+            color: Theme.textMuted
+            wrapMode: Text.WordWrap
+        }
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: Theme.spaceSm
+            AppButton {
+                kind: "primary"
+                text: "Add files"
+                iconName: "add"
+                toolTipText: "Choose video, audio, or subtitle files (Ctrl+O)"
+                onClicked: root.addFilesRequested()
             }
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: "Drop video, audio, or subtitle files"
-                color: appController.colorTextSecondary
-                font.pixelSize: 12
-            }
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: "or click  + Files  /  + Folder"
-                color: Material.theme === Material.Dark ? "#444444" : "#aaaaaa"
-                font.pixelSize: 11
+            AppButton {
+                text: "Add folder"
+                iconName: "folder"
+                toolTipText: "Add every supported file in a folder and its subfolders (Ctrl+Shift+O)"
+                onClicked: root.addFolderRequested()
             }
         }
 
-        MouseArea {
-            anchors.fill: parent
-            onClicked: fileListRoot.emptyPanelClicked()
-        }
-    }
-
-    // Scrollable file list
-    ScrollView {
-        anchors.fill: parent
-        clip: true
-        visible: transcriptionController.fileModel.count > 0
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        ScrollBar.vertical.policy:   ScrollBar.AsNeeded
-
-        ListView {
-            id: listView
-            model: transcriptionController.fileModel
-            spacing: 4
-            topMargin: 4
-            bottomMargin: 4
-            leftMargin: 4
-            rightMargin: 4
-            clip: true
-            focus: true
-
-            delegate: FileItem {
-                width: ListView.view.width - 8
-                onItemClicked: function(idx, mods) { fileListRoot.handleClick(idx, mods) }
-            }
-
-            displaced: Transition {
-                NumberAnimation { properties: "x,y"; easing.type: Easing.OutQuad; duration: 120 }
-            }
-
-            Keys.onPressed: function(event) {
-                var count = transcriptionController.fileModel.count
-                if (count === 0) { event.accepted = false; return }
-
-                if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
-                    transcriptionController.fileModel.selectAll()
-                    fileListRoot._anchor = 0
-                    fileListRoot._cursor = count - 1
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Delete) {
-                    transcriptionController.fileModel.removeSelected()
-                    fileListRoot._anchor = -1
-                    fileListRoot._cursor = -1
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
-                    var isDown  = event.key === Qt.Key_Down
-                    var isShift = !!(event.modifiers & Qt.ShiftModifier)
-                    var cur     = fileListRoot._cursor
-
-                    if (cur < 0) {
-                        cur = isDown ? 0 : count - 1
-                    } else {
-                        cur = isDown ? Math.min(count - 1, cur + 1) : Math.max(0, cur - 1)
-                    }
-
-                    if (isShift) {
-                        if (fileListRoot._anchor < 0)
-                            fileListRoot._anchor = fileListRoot._cursor < 0 ? cur : fileListRoot._cursor
-                        fileListRoot._cursor = cur
-                        transcriptionController.fileModel.selectRange(fileListRoot._anchor, cur)
-                    } else {
-                        fileListRoot._anchor = cur
-                        fileListRoot._cursor = cur
-                        transcriptionController.fileModel.setSingle(cur)
-                    }
-                    listView.positionViewAtIndex(cur, ListView.Contain)
-                    event.accepted = true
+        // How a first run works, so nobody has to guess what comes after adding files.
+        Column {
+            id: firstRunSteps
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spaceSm
+            spacing: Theme.spaceXs
+            Repeater {
+                model: root.firstRunSteps
+                delegate: Text {
+                    required property int index
+                    required property string modelData
+                    width: firstRunSteps.width
+                    text: (index + 1) + ".  " + modelData
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    color: Theme.textMuted
                 }
             }
         }
     }
 
-    // Drag-and-drop overlay
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // Scan progress for large folders
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 40
+            visible: root.scanning
+            color: Theme.accentSoft
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spaceMd
+                anchors.rightMargin: Theme.spaceSm
+                spacing: Theme.spaceSm
+
+                BusyIndicator {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 18
+                    Layout.preferredHeight: 18
+                    padding: 0  // the style's default padding shrinks the spinner to a sliver at this size
+                    running: root.scanning
+                    Accessible.ignored: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Scanning folder... " + root.scanFound.toLocaleString(Qt.locale(), "f", 0) + " files found"
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    color: Theme.text
+                    elide: Text.ElideRight
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                }
+                AppButton {
+                    kind: "ghost"
+                    compact: true
+                    text: "Stop"
+                    toolTipText: "Stop scanning; files found so far stay in the queue"
+                    onClicked: root.stopScanRequested()
+                }
+            }
+        }
+
+        ListView {
+            id: listView
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.fileModel.count > 0
+            model: root.fileModel
+            clip: true
+            focus: true
+            spacing: 2
+            topMargin: Theme.spaceXs
+            bottomMargin: Theme.spaceXs
+            leftMargin: Theme.spaceXs
+            rightMargin: Theme.spaceXs
+            reuseItems: true
+            cacheBuffer: 600
+            keyNavigationEnabled: false
+            activeFocusOnTab: true
+            highlightFollowsCurrentItem: false
+            boundsBehavior: Flickable.StopAtBounds
+
+            Accessible.role: Accessible.List
+            Accessible.name: "File queue, " + root.fileModel.count + " files"
+
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+            delegate: FileItem {
+                width: ListView.view.width - listView.leftMargin - listView.rightMargin
+                current: ListView.isCurrentItem
+                listHasFocus: listView.activeFocus
+                onClicked: (index, modifiers) => root._click(index, modifiers)
+                onContextMenuRequested: index => root._openMenu(index)
+                onRemoveRequested: index => root.fileModel.removeAt(index)
+            }
+
+            Keys.onPressed: function(event) {
+                var count = root.fileModel.count
+                if (count === 0) return
+                var ctrl = event.modifiers & Qt.ControlModifier
+                var shift = event.modifiers & Qt.ShiftModifier
+                if (event.key === Qt.Key_A && ctrl) {
+                    root.fileModel.selectAll()
+                } else if (event.key === Qt.Key_Delete) {
+                    root.fileModel.removeSelected()
+                    listView.currentIndex = Math.min(listView.currentIndex, root.fileModel.count - 1)
+                } else if (event.key === Qt.Key_Space && listView.currentIndex >= 0) {
+                    root.fileModel.toggleSelection(listView.currentIndex)
+                } else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && shift)) {
+                    root._openMenu(Math.max(0, listView.currentIndex))
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down
+                           || event.key === Qt.Key_Home || event.key === Qt.Key_End) {
+                    var cur = listView.currentIndex
+                    if (event.key === Qt.Key_Home) cur = 0
+                    else if (event.key === Qt.Key_End) cur = count - 1
+                    else if (cur < 0) cur = 0
+                    else cur = event.key === Qt.Key_Down ? Math.min(count - 1, cur + 1) : Math.max(0, cur - 1)
+                    if (shift) {
+                        if (root._anchor < 0) root._anchor = Math.max(0, listView.currentIndex)
+                        root.fileModel.selectRange(root._anchor, cur)
+                    } else if (!ctrl) {
+                        root.fileModel.setSingle(cur)
+                        root._anchor = cur
+                    }
+                    listView.currentIndex = cur
+                    listView.positionViewAtIndex(cur, ListView.Contain)
+                } else {
+                    return
+                }
+                event.accepted = true
+            }
+        }
+    }
+
+    Menu {
+        id: contextMenu
+        property int row: -1
+        property var info: ({})
+        readonly property var outputs: contextMenu.info.outputs || []
+
+        MenuItem {
+            text: "Show in folder"
+            enabled: (contextMenu.info.path || "").length > 0
+            onTriggered: root.revealRequested(contextMenu.info.path)
+        }
+        MenuItem {
+            text: "Show the result"
+            enabled: contextMenu.outputs.length > 0
+            onTriggered: root.revealRequested(contextMenu.outputs[0])
+        }
+        Menu {
+            title: "Send the result to"
+            enabled: contextMenu.outputs.length > 0 && root.sendTargets.length > 0
+            Repeater {
+                model: root.sendTargets
+                delegate: MenuItem {
+                    required property var modelData
+                    text: modelData.label
+                    onTriggered: root.sendRequested(modelData.key, contextMenu.info.path, contextMenu.outputs)
+                }
+            }
+        }
+        MenuItem {
+            text: "Choose subtitle to speak..."
+            visible: root.allowCompanion && contextMenu.info.kind !== "subtitle"
+            height: visible ? implicitHeight : 0
+            onTriggered: root.companionRequested(contextMenu.row)
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: root.fileModel.selectedCount > 1 ? "Remove " + root.fileModel.selectedCount + " selected" : "Remove"
+            onTriggered: root.fileModel.removeSelected()
+        }
+        MenuItem {
+            text: "Remove finished"
+            enabled: root.fileModel.doneCount > 0
+            onTriggered: root.fileModel.removeFinished()
+        }
+        MenuItem {
+            text: "Clear queue"
+            onTriggered: root.clearRequested()
+        }
+    }
+
     DropArea {
+        id: dropArea
         anchors.fill: parent
         onDropped: function(drop) {
             if (drop.hasUrls) {
-                var urls = []
-                for (var i = 0; i < drop.urls.length; i++)
-                    urls.push(drop.urls[i])
-                transcriptionController.addFiles(urls)
+                root.filesDropped(drop.urls)
+                drop.acceptProposedAction()
             }
         }
 
         Rectangle {
             anchors.fill: parent
-            radius: 8
-            color: Qt.rgba(0, 0.47, 0.83, 0.08)
-            border.color: Material.accent
+            anchors.margins: Theme.spaceXs
+            radius: Theme.radiusLarge
+            color: Theme.dark ? "#332a6fd6" : "#1a0b62c4"
+            border.color: Theme.accent
             border.width: 2
-            visible: parent.containsDrag
+            visible: dropArea.containsDrag
+
+            Text {
+                anchors.centerIn: parent
+                text: "Drop to add to the queue"
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSubtitle
+                font.weight: Font.DemiBold
+                color: Theme.accent
+            }
         }
     }
 }

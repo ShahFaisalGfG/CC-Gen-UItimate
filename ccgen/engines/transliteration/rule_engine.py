@@ -1,4 +1,4 @@
-# rule_engine.py — fast, fully offline transliteration: indic-transliteration for genuine
+# rule_engine.py - fast, fully offline transliteration: indic-transliteration for genuine
 # Indic-script pairs, a dedicated converter for Urdu <-> Roman Urdu, and diacritic cleanup
 # for Hindi/Punjabi -> Urdu output (see urdu_roman_map.py for why the built-in scheme isn't used)
 
@@ -11,6 +11,7 @@ from indic_transliteration import sanscript
 from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
 from ccgen.engines.transliteration.base import TransliterationEngine
 from ccgen.engines.transliteration.urdu_roman_map import roman_to_urdu, urdu_to_roman
+from ccgen.utils.callbacks import JobCancelled, emit_progress, emit_segment
 
 _log = logging.getLogger(__name__)
 
@@ -61,11 +62,13 @@ class RuleEngine(TransliterationEngine):
             )
             total = len(segments)
             results = [
-                self._convert_one(seg, idx + 1, total, progress_cb, progress_num_cb, segment_cb)
+                self._convert_one(seg, idx + 1, total, progress_num_cb, segment_cb)
                 for idx, seg in enumerate(segments)
             ]
             _log.info("Transliteration complete: %d segments", len(results))
             return results
+        except JobCancelled:
+            raise
         except Exception as e:
             _log.error("Transliteration failed: %r", e, exc_info=True)
             raise RuntimeError(f"Transliteration failed: {e}") from e
@@ -75,7 +78,6 @@ class RuleEngine(TransliterationEngine):
         seg: Union[Segment, TranslatedSegment],
         position: int,
         total: int,
-        progress_cb: Optional[Callable[[str], None]],
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
         segment_cb: Optional[Callable[[TransliteratedSegment], None]] = None,
     ) -> TransliteratedSegment:
@@ -92,14 +94,11 @@ class RuleEngine(TransliterationEngine):
                 source_scheme=self._source_key,
                 target_scheme=self._target_key,
             )
-            if progress_cb:
-                try:
-                    progress_cb(f"Transliterated segment {seg['id'] + 1}")
-                except Exception:
-                    pass
-            _seg_cb(segment_cb, result)
-            _num_cb(progress_num_cb, position, total)
+            emit_segment(segment_cb, result)
+            emit_progress(progress_num_cb, position, total)
             return result
+        except JobCancelled:
+            raise
         except Exception as e:
             _log.error("Segment %s transliteration error: %r", seg.get("id", "?"), e, exc_info=True)  # type: ignore[call-overload]
             raise RuntimeError(f"Segment {seg.get('id', '?')} transliteration error: {e}") from e  # type: ignore[call-overload]
@@ -133,20 +132,3 @@ def strip_diacritics(text: str) -> str:
     """Remove Arabic short-vowel diacritics that real Urdu writing normally omits."""
     return _DIACRITICS_RE.sub("", text)
 
-
-def _num_cb(fn: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
-    """Call a numeric progress callback safely when present."""
-    try:
-        if fn:
-            fn(done, total)
-    except Exception:
-        pass
-
-
-def _seg_cb(fn: Optional[Callable[[TransliteratedSegment], None]], seg: TransliteratedSegment) -> None:
-    """Call a per-segment result callback safely when present."""
-    try:
-        if fn:
-            fn(seg)
-    except Exception:
-        pass

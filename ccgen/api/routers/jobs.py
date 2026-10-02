@@ -1,28 +1,44 @@
-# jobs.py — routes to start, poll, cancel, and stream transcription/translation jobs
+# jobs.py - routes to validate, start, poll, cancel, and stream task jobs
 
 import logging
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
 
-from ccgen.api.schemas.job import JobConfig
+from ccgen.api.schemas.job import config_errors, parse_task_config
 from ccgen.api.services.job_manager import JobManager
-from ccgen.core.pipeline import PipelineConfig
 
 _log = logging.getLogger(__name__)
 router = APIRouter()
 _manager = JobManager()
 
 
+def reset_manager() -> None:
+    """Rebind the job manager to the current app lifecycle's event loop (called at API startup)."""
+    _manager.reset()
+
+
+def cancel_all_jobs() -> None:
+    """Cancel every running or waiting job; the desktop app calls this as it closes."""
+    _manager.cancel_all()
+
+
 @router.post("/jobs")
-async def start_job(config: JobConfig) -> dict[str, str]:
-    """Start a new transcription/translation/transliteration job."""
+async def start_job(body: dict[str, Any] = Body(...)) -> dict[str, str]:
+    """Start a generate, translate, transliterate, dub, or workflow job."""
     try:
-        pipeline_config = PipelineConfig(**config.model_dump())
-        job_id = await _manager.start_job(pipeline_config)
+        config = parse_task_config(body)
+        job_id = await _manager.start_job(config)
         return {"job_id": job_id}
     except Exception as e:
         _log.error("Failed to start job: %r", e, exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/jobs/validate")
+def validate_job(body: dict[str, Any] = Body(...)) -> dict[str, list[str]]:
+    """Return every reason a job body can't run; an empty list means it is ready to start."""
+    return {"errors": config_errors(body)}
 
 
 @router.get("/jobs/{job_id}")
@@ -39,15 +55,22 @@ def get_job(job_id: str) -> dict:
         "success": result.success,
         "error": result.error,
         "output_files": result.output_files,
+        "warnings": result.warnings,
     }
 
 
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: str) -> dict[str, bool]:
-    """Request cancellation of a running job."""
+    """Request cancellation of a running or waiting job."""
     if not _manager.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Unknown job id")
     return {"cancelled": True}
+
+
+@router.post("/jobs/release-models")
+def release_models() -> dict[str, bool]:
+    """Free cached models once the client's queue is done; refused while any job is active."""
+    return {"released": _manager.release_models()}
 
 
 @router.websocket("/jobs/{job_id}/stream")

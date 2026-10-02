@@ -1,0 +1,384 @@
+{
+  "source": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/VOICES.md",
+  "voices": [
+    {
+      "id": "af_alloy",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_alloy",
+      "grade": "C"
+    },
+    {
+      "id": "af_aoede",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_aoede",
+      "grade": "C+"
+    },
+    {
+      "id": "af_bella",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_bella",
+      "grade": "A-"
+    },
+    {
+      "id": "af_heart",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_heart",
+      "grade": "A"
+    },
+    {
+      "id": "af_jessica",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_jessica",
+      "grade": "D"
+    },
+    {
+      "id": "af_kore",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_kore",
+      "grade": "C+"
+    },
+    {
+      "id": "af_nicole",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_nicole",
+      "grade": "B-"
+    },
+    {
+      "id": "af_nova",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_nova",
+      "grade": "C"
+    },
+    {
+      "id": "af_river",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_river",
+      "grade": "D"
+    },
+    {
+      "id": "af_sarah",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_sarah",
+      "grade": "C+"
+    },
+    {
+      "id": "af_sky",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - af_sky",
+      "grade": "C-"
+    },
+    {
+      "id": "am_adam",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_adam",
+      "grade": "F+"
+    },
+    {
+      "id": "am_echo",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_echo",
+      "grade": "D"
+    },
+    {
+      "id": "am_eric",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_eric",
+      "grade": "D"
+    },
+    {
+      "id": "am_fenrir",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_fenrir",
+      "grade": "C+"
+    },
+    {
+      "id": "am_liam",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_liam",
+      "grade": "D"
+    },
+    {
+      "id": "am_michael",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_michael",
+      "grade": "C+"
+    },
+    {
+      "id": "am_onyx",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_onyx",
+      "grade": "D"
+    },
+    {
+      "id": "am_puck",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_puck",
+      "grade": "C+"
+    },
+    {
+      "id": "am_santa",
+      "language": "en",
+      "locale": "en-us",
+      "label": "American English - am_santa",
+      "grade": "D-"
+    },
+    {
+      "id": "bf_alice",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bf_alice",
+      "grade": "D"
+    },
+    {
+      "id": "bf_emma",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bf_emma",
+      "grade": "B-"
+    },
+    {
+      "id": "bf_isabella",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bf_isabella",
+      "grade": "C"
+    },
+    {
+      "id": "bf_lily",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bf_lily",
+      "grade": "D"
+    },
+    {
+      "id": "bm_daniel",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bm_daniel",
+      "grade": "D"
+    },
+    {
+      "id": "bm_fable",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bm_fable",
+      "grade": "C"
+    },
+    {
+      "id": "bm_george",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bm_george",
+      "grade": "C"
+    },
+    {
+      "id": "bm_lewis",
+      "language": "en",
+      "locale": "en-gb",
+      "label": "British English - bm_lewis",
+      "grade": "D+"
+    },
+    {
+      "id": "ef_dora",
+      "language": "es",
+      "locale": "es",
+      "label": "Spanish - ef_dora",
+      "grade": "unrated"
+    },
+    {
+      "id": "em_alex",
+      "language": "es",
+      "locale": "es",
+      "label": "Spanish - em_alex",
+      "grade": "unrated"
+    },
+    {
+      "id": "em_santa",
+      "language": "es",
+      "locale": "es",
+      "label": "Spanish - em_santa",
+      "grade": "unrated"
+    },
+    {
+      "id": "ff_siwis",
+      "language": "fr",
+      "locale": "fr",
+      "label": "French - ff_siwis",
+      "grade": "B-"
+    },
+    {
+      "id": "hf_alpha",
+      "language": "hi",
+      "locale": "hi",
+      "label": "Hindi - hf_alpha",
+      "grade": "C"
+    },
+    {
+      "id": "hf_beta",
+      "language": "hi",
+      "locale": "hi",
+      "label": "Hindi - hf_beta",
+      "grade": "C"
+    },
+    {
+      "id": "hm_omega",
+      "language": "hi",
+      "locale": "hi",
+      "label": "Hindi - hm_omega",
+      "grade": "C"
+    },
+    {
+      "id": "hm_psi",
+      "language": "hi",
+      "locale": "hi",
+      "label": "Hindi - hm_psi",
+      "grade": "C"
+    },
+    {
+      "id": "if_sara",
+      "language": "it",
+      "locale": "it",
+      "label": "Italian - if_sara",
+      "grade": "C"
+    },
+    {
+      "id": "im_nicola",
+      "language": "it",
+      "locale": "it",
+      "label": "Italian - im_nicola",
+      "grade": "C"
+    },
+    {
+      "id": "jf_alpha",
+      "language": "ja",
+      "locale": "ja",
+      "label": "Japanese - jf_alpha",
+      "grade": "C+"
+    },
+    {
+      "id": "jf_gongitsune",
+      "language": "ja",
+      "locale": "ja",
+      "label": "Japanese - jf_gongitsune",
+      "grade": "C"
+    },
+    {
+      "id": "jf_nezumi",
+      "language": "ja",
+      "locale": "ja",
+      "label": "Japanese - jf_nezumi",
+      "grade": "C-"
+    },
+    {
+      "id": "jf_tebukuro",
+      "language": "ja",
+      "locale": "ja",
+      "label": "Japanese - jf_tebukuro",
+      "grade": "C"
+    },
+    {
+      "id": "jm_kumo",
+      "language": "ja",
+      "locale": "ja",
+      "label": "Japanese - jm_kumo",
+      "grade": "C-"
+    },
+    {
+      "id": "pf_dora",
+      "language": "pt",
+      "locale": "pt-br",
+      "label": "Portuguese - pf_dora",
+      "grade": "unrated"
+    },
+    {
+      "id": "pm_alex",
+      "language": "pt",
+      "locale": "pt-br",
+      "label": "Portuguese - pm_alex",
+      "grade": "unrated"
+    },
+    {
+      "id": "pm_santa",
+      "language": "pt",
+      "locale": "pt-br",
+      "label": "Portuguese - pm_santa",
+      "grade": "unrated"
+    },
+    {
+      "id": "zf_xiaobei",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zf_xiaobei",
+      "grade": "D"
+    },
+    {
+      "id": "zf_xiaoni",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zf_xiaoni",
+      "grade": "D"
+    },
+    {
+      "id": "zf_xiaoxiao",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zf_xiaoxiao",
+      "grade": "D"
+    },
+    {
+      "id": "zf_xiaoyi",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zf_xiaoyi",
+      "grade": "D"
+    },
+    {
+      "id": "zm_yunjian",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zm_yunjian",
+      "grade": "D"
+    },
+    {
+      "id": "zm_yunxi",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zm_yunxi",
+      "grade": "D"
+    },
+    {
+      "id": "zm_yunxia",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zm_yunxia",
+      "grade": "D"
+    },
+    {
+      "id": "zm_yunyang",
+      "language": "zh",
+      "locale": "zh",
+      "label": "Mandarin Chinese - zm_yunyang",
+      "grade": "D"
+    }
+  ],
+  "voice_bank_source": "https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.1"
+}

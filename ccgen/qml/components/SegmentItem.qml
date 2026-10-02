@@ -1,54 +1,92 @@
-// qmllint disable unqualified import
 import QtQuick
-import QtQuick.Controls.Material
+import QtQuick.Layouts
 
-Rectangle {
+// One transcript cue: time range, the spoken text, and its translation / transliteration
+// underneath once those stages reach it.
+Item {
     id: segItem
 
-    required property int    segId
-    required property real   segStart
+    required property int index
+    required property real segStart
+    required property real segEnd
     required property string segText
+    required property string segTranslation
+    required property string segTransliteration
 
-    height: contentRow.implicitHeight + 12
-    radius: 4
-    color: (segId % 2 === 0)
-        ? (Material.theme === Material.Dark ? "#1a1a1a" : "#f5f5f5")
-        : "transparent"
+    implicitHeight: content.implicitHeight + 2 * Theme.spaceSm
 
-    Row {
-        id: contentRow
-        anchors.left:    parent.left
-        anchors.right:   parent.right
-        anchors.top:     parent.top
-        anchors.margins: 8
-        spacing: 10
+    Accessible.role: Accessible.ListItem
+    Accessible.name: segItem._time(segItem.segStart) + ". " + segItem.segText
+        + (segItem.segTranslation ? ". Translation: " + segItem.segTranslation : "")
+        + (segItem.segTransliteration ? ". Transliteration: " + segItem.segTransliteration : "")
 
-        Text {
-            id: tsLabel
-            text: _formatTime(segItem.segStart)
-            color: Material.accent
-            font.family: "Consolas"
-            font.pixelSize: 11
-            width: 64
-            topPadding: 1
-        }
-
-        Text {
-            text: segItem.segText.trim()
-            wrapMode: Text.WordWrap
-            font.pixelSize: 12
-            color: Material.foreground
-            width: segItem.width - tsLabel.width - contentRow.spacing - 16
-        }
-    }
-
-    function _formatTime(secs) {
+    function _time(secs) {
         var t = Math.floor(secs)
         var h = Math.floor(t / 3600)
         var m = Math.floor((t % 3600) / 60)
         var s = t % 60
-        return (h > 0 ? String(h).padStart(2, "0") + ":" : "")
-            + String(m).padStart(2, "0") + ":"
-            + String(s).padStart(2, "0")
+        return (h > 0 ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: segItem.index % 2 === 0 ? Theme.surfaceAlt : "transparent"
+        radius: Theme.radius
+    }
+
+    RowLayout {
+        id: content
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Theme.spaceMd
+        anchors.rightMargin: Theme.spaceMd
+        spacing: Theme.spaceMd
+
+        Text {
+            Layout.alignment: Qt.AlignTop
+            Layout.preferredWidth: 92
+            text: segItem._time(segItem.segStart) + " - " + segItem._time(segItem.segEnd)
+            font.family: "Cascadia Mono, Consolas"
+            font.pixelSize: Theme.fontCaption
+            color: Theme.accent
+            Accessible.ignored: true
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 3
+
+            Text {
+                Layout.fillWidth: true
+                text: segItem.segText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                color: Theme.text
+                wrapMode: Text.Wrap
+                Accessible.ignored: true
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: segItem.segTranslation.length > 0
+                text: segItem.segTranslation
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                color: Theme.accent
+                wrapMode: Text.Wrap
+                Accessible.ignored: true
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: segItem.segTransliteration.length > 0
+                text: segItem.segTransliteration
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                font.italic: true
+                color: Theme.textMuted
+                wrapMode: Text.Wrap
+                Accessible.ignored: true
+            }
+        }
     }
 }

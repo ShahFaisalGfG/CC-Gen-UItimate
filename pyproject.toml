@@ -5,23 +5,27 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ccgen"
 version = "1.0.0"
-description = "Offline video/audio transcription and subtitle generation"
+description = "Offline subtitle generation, translation, transliteration, and dubbing"
 authors = [{ name = "Shah Faisal", email = "shahfaisalgfg@gmail.com" }]
 readme = "readme.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
     "faster-whisper>=1.0.3",
+    "av>=11",
     "argostranslate>=1.9.6",
-    "ffmpeg-python>=0.2.0",
     "PySide6>=6.7.0",
     "indic-transliteration>=2.3",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "transformers>=4.44",
-    "torch>=2.2",
+    "torch>=2.2,<2.9",
+    "torchaudio>=2.2,<2.9",
     "sentencepiece>=0.2.0",
     "huggingface_hub>=0.24",
+    "coqui-tts[ja,zh,ko]>=0.27.5,<0.28",
+    "kokoro-onnx>=0.4.9",
+    "piper-tts>=1.3",
 ]
 
 [project.scripts]

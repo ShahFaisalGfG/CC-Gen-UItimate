@@ -1,56 +1,52 @@
 // qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
-import QtQuick.Window
 import "components"
 
-ApplicationWindow {
+AppWindow {
     id: manageWin
 
-    width: 820
-    height: 740
-    minimumWidth: 720
-    minimumHeight: 580
+    width: 860
+    height: 700
+    minimumWidth: 680
+    minimumHeight: 520
     title: "Manage Models"
-    flags: Qt.FramelessWindowHint | Qt.Window
     modality: Qt.ApplicationModal
 
-    Material.theme: appController && appController.currentTheme === "dark" ? Material.Dark : Material.Light
-    Material.accent: "#0078d4"
-    Overlay.modal: Rectangle { color: "#99000000" }
-
-    // Per-asset-id live download state (queued/downloading + progress), kept outside the
-    // flat catalog snapshot so a refresh triggered by ONE finished download doesn't wipe the
-    // "Queued…" indicator off every OTHER item still waiting in the backend's FIFO queue.
+    // Per-asset-id live download state (queued/downloading + progress), kept outside the flat
+    // catalog snapshot so a refresh triggered by ONE finished download doesn't wipe the
+    // "Queued" indicator off every OTHER item still waiting in the backend's FIFO queue.
     property var pendingState: ({})
     // Flat, merged (catalog + pendingState) snapshot rebuilt on every relevant event; every
-    // tab/engine-group view below is just a filtered read of this one list.
+    // tab/engine-group view below is a filtered read of this one list.
     property var catalog: []
     property real totalBytes: 0
 
-    Component.onCompleted: {
-        x = Screen.virtualX + Math.round((Screen.desktopAvailableWidth  - width)  / 2)
-        y = Screen.virtualY + Math.round((Screen.desktopAvailableHeight - height) / 2)
-        rebuild()
-    }
+    readonly property var categories: [
+        { key: "whisper", label: "Transcription", hint: "Whisper speech recognition models. Larger models are more accurate and slower." },
+        { key: "translation", label: "Translation", hint: "Offline language packages. Each one translates between English and that language; English bridges other pairs." },
+        { key: "transliteration", label: "Transliteration", hint: "Optional neural models for more natural script conversion. The rule-based engine needs no download." },
+        { key: "voices", label: "Voices", hint: "Dubbing voices. XTTS-v2 clones the original speakers; Kokoro and Piper are ready-made voices. Each downloads once." }
+    ]
 
+    Component.onCompleted: rebuild()
     onClosing: manageWin.destroy()
+
+    Shortcut { sequence: "Escape"; onActivated: manageWin.close() }
 
     Connections {
         target: modelsController
         function onAssetsChanged() { manageWin.rebuild() }
         function onAssetQueued(id) {
-            manageWin.pendingState[id] = {
-                downloadState: "queued", progressDone: 0, progressTotal: 0, statusMessage: "",
-            }
+            manageWin.pendingState[id] = { downloadState: "queued", progressDone: 0, progressTotal: 0, statusMessage: "" }
             manageWin.rebuild()
         }
         function onAssetStatus(id, message) {
-            // A status message is proof the worker has actually started on this asset, even
-            // when no byte-progress ticks ever arrive (some download paths report late or
-            // not at all) - so it also clears "queued" the same way a real progress tick would.
+            // A status message proves the worker started this asset even when no byte
+            // progress arrives (some download paths report late or not at all).
             var pending = manageWin.pendingState[id]
             if (pending) {
                 pending.statusMessage = message
@@ -59,21 +55,17 @@ ApplicationWindow {
             manageWin.rebuild()
         }
         function onAssetProgress(id, done, total) {
-            manageWin.pendingState[id] = {
-                downloadState: "downloading", progressDone: done, progressTotal: total, statusMessage: "",
-            }
+            manageWin.pendingState[id] = { downloadState: "downloading", progressDone: done, progressTotal: total, statusMessage: "" }
             manageWin.rebuild()
         }
         function onAssetFinished(id, success, error) {
             delete manageWin.pendingState[id]
-            if (!success && error !== "Cancelled") {
-                errorBanner.text = "Download failed: " + error
-                errorBanner.visible = true
-            }
-            // The controller's own refreshAssets() call (made after every finished event)
-            // triggers onAssetsChanged shortly after, rebuilding with the real
-            // downloaded/size state; rebuild() here avoids a stale progress row in the meantime.
+            if (!success && error !== "Cancelled")
+                banner.text = "Download failed: " + error
             manageWin.rebuild()
+        }
+        function onRemoveFailed(id, error) {
+            banner.text = "Couldn't remove a model: " + error
         }
     }
 
@@ -91,7 +83,7 @@ ApplicationWindow {
                 downloadState: pending ? pending.downloadState : "idle",
                 progressDone: pending ? pending.progressDone : 0,
                 progressTotal: pending ? pending.progressTotal : 0,
-                statusMessage: pending ? pending.statusMessage : "",
+                statusMessage: pending ? pending.statusMessage : ""
             })
             if (a.downloaded) total += a.size_bytes || 0
         }
@@ -112,30 +104,25 @@ ApplicationWindow {
         return seen
     }
 
-    function statsFor(category, engine) {
-        var rows = manageWin.rowsFor(category, engine)
-        return { downloaded: rows.filter(r => r.downloaded).length, total: rows.length }
-    }
-
     function downloadAllInGroup(category, engine) {
-        var rows = manageWin.rowsFor(category, engine)
-        for (var i = 0; i < rows.length; i++) {
-            if (!rows[i].downloaded && rows[i].downloadState === "idle")
-                modelsController.downloadAsset(rows[i].id)
-        }
+        manageWin.rowsFor(category, engine).forEach(function(row) {
+            if (!row.downloaded && row.downloadState === "idle") manageWin.requestDownload(row.id)
+        })
     }
 
-    function removeAllInGroup(category, engine) {
-        var rows = manageWin.rowsFor(category, engine)
-        for (var i = 0; i < rows.length; i++) {
-            if (rows[i].downloaded) modelsController.removeAsset(rows[i].id)
+    // The voice cloning model asks for its licence once before its first download.
+    function requestDownload(id) {
+        var accepted = prefsController.settings.dubbing && prefsController.settings.dubbing.xtts_terms_accepted
+        if (id === "voices:xtts" && !accepted) {
+            termsDialog.open()
+            return
         }
+        modelsController.downloadAsset(id)
     }
 
-    function removeAllDownloaded() {
-        for (var i = 0; i < manageWin.catalog.length; i++) {
-            if (manageWin.catalog[i].downloaded) modelsController.removeAsset(manageWin.catalog[i].id)
-        }
+    XttsTermsDialog {
+        id: termsDialog
+        onAccepted: modelsController.downloadAsset("voices:xtts")
     }
 
     function cancelDownload(id) {
@@ -145,354 +132,299 @@ ApplicationWindow {
     }
 
     function formatBytes(bytes) {
-        if (!bytes || bytes <= 0) return "—"
+        if (!bytes || bytes <= 0) return "-"
         var units = ["B", "KB", "MB", "GB"]
         var value = bytes
-        var unitIndex = 0
-        while (value >= 1024 && unitIndex < units.length - 1) {
-            value /= 1024
-            unitIndex++
-        }
-        return value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1) + " " + units[unitIndex]
+        var unit = 0
+        while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++ }
+        return value.toFixed(value >= 10 || unit === 0 ? 0 : 1) + " " + units[unit]
     }
 
-    // One asset row's action area is exactly one of these four states at a time; declaring
-    // them as Loader-swapped Components (instead of four always-present sibling items toggled
-    // by `visible`) keeps the invisible ones from still reserving layout space, which is what
-    // made the progress row render inset from the flush-right edge every other state uses.
-    Component {
-        id: idleActionComp
-        Button {
-            property string rowId: ""
-            text: "⬇  Download"
-            flat: true
-            font.pixelSize: 12
-            onClicked: modelsController.downloadAsset(rowId)
+    // Remove-confirmation for bulk actions: `ids` are removed when the user confirms.
+    Dialog {
+        id: confirmRemove
+        property var ids: []
+        property string message: ""
+        title: "Remove downloaded models?"
+        modal: true
+        anchors.centerIn: parent
+        standardButtons: Dialog.Yes | Dialog.Cancel
+        Text {
+            width: 360
+            text: confirmRemove.message
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontBody
+            color: Theme.text
         }
+        onAccepted: confirmRemove.ids.forEach(id => modelsController.removeAsset(id))
     }
 
-    Component {
-        id: downloadedActionComp
-        RowLayout {
-            property string rowId: ""
-            spacing: 8
-            Text {
-                text: "✓ Downloaded"
-                font.pixelSize: 12
-                color: appController.colorSuccess
-            }
-            Button {
-                text: "Remove"
-                flat: true
-                font.pixelSize: 12
-                Material.foreground: appController.colorDanger
-                onClicked: modelsController.removeAsset(parent.rowId)
-            }
-        }
-    }
-
-    Component {
-        id: queuedActionComp
-        RowLayout {
-            property string rowId: ""
-            spacing: 8
-            Text {
-                text: "Queued…"
-                font.pixelSize: 12
-                color: appController.colorTextSecondary
-            }
-            Button {
-                text: "✕"
-                flat: true
-                font.pixelSize: 12
-                implicitWidth: 28
-                Material.foreground: appController.colorDanger
-                onClicked: manageWin.cancelDownload(parent.rowId)
-            }
-        }
-    }
-
-    Component {
-        id: downloadingActionComp
-        RowLayout {
-            property string rowId: ""
-            property int progressDone: 0
-            property int progressTotal: 0
-            property string statusMessage: ""
-            property int approxSizeMb: 0
-            spacing: 8
-            Layout.preferredWidth: 250
-
-            // The static known size is a stable denominator - the live backend total can
-            // reset upward mid-download (a multi-file repo's aggregate total grows as each
-            // new file joins), which made the percentage look like it was jumping around.
-            readonly property real approxTotalBytes: approxSizeMb > 0 ? approxSizeMb * 1024 * 1024 : 0
-            readonly property real effectiveTotal: approxTotalBytes > 0 ? approxTotalBytes : progressTotal
-
-            ProgressBar {
-                Layout.preferredWidth: 100
-                from: 0
-                to: parent.effectiveTotal > 0 ? parent.effectiveTotal : 1
-                value: parent.effectiveTotal > 0 ? Math.min(parent.progressDone, parent.effectiveTotal) : 0
-                indeterminate: parent.effectiveTotal === 0 || parent.statusMessage.length > 0
-            }
-            Text {
-                text: parent.statusMessage.length > 0
-                    ? parent.statusMessage
-                    : (parent.effectiveTotal > 0
-                        ? Math.min(100, Math.round(100 * parent.progressDone / parent.effectiveTotal)) + "%"
-                        : "")
-                font.pixelSize: 12
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-                color: appController.colorTextSecondary
-            }
-            Button {
-                text: "✕"
-                flat: true
-                font.pixelSize: 12
-                implicitWidth: 28
-                Material.foreground: appController.colorDanger
-                onClicked: manageWin.cancelDownload(parent.rowId)
-            }
-        }
-    }
-
-    // One catalog row: label, size, and the state-driven action area above.
-    Component {
-        id: assetRowComp
-
-        Item {
-            id: rowRoot
-            required property string id
-            required property string label
-            required property bool downloaded
-            required property real sizeBytes
-            required property int approxSizeMb
-            required property string downloadState
-            required property int progressDone
-            required property int progressTotal
-            required property string statusMessage
-
-            Layout.fillWidth: true
-            implicitHeight: 52
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin:  12
-                anchors.rightMargin: 12
-                spacing: 10
-
-                Text {
-                    text: rowRoot.label
-                    font.pixelSize: 13
-                    color: Material.foreground
-                    Layout.preferredWidth: 220
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    text: rowRoot.downloaded
-                        ? manageWin.formatBytes(rowRoot.sizeBytes)
-                        : (rowRoot.approxSizeMb > 0
-                            ? "~" + manageWin.formatBytes(rowRoot.approxSizeMb * 1024 * 1024)
-                            : "—")
-                    font.pixelSize: 12
-                    color: appController.colorTextSecondary
-                    Layout.preferredWidth: 70
-                }
-
-                Item { Layout.fillWidth: true }
-
-                Loader {
-                    Layout.alignment: Qt.AlignRight
-                    sourceComponent: {
-                        if (rowRoot.downloadState === "downloading") return downloadingActionComp
-                        if (rowRoot.downloadState === "queued") return queuedActionComp
-                        if (rowRoot.downloaded) return downloadedActionComp
-                        return idleActionComp
-                    }
-                    onLoaded: {
-                        if (item.hasOwnProperty("rowId")) item.rowId = rowRoot.id
-                        if (item.hasOwnProperty("progressDone")) {
-                            item.progressDone    = rowRoot.progressDone
-                            item.progressTotal   = rowRoot.progressTotal
-                            item.statusMessage   = rowRoot.statusMessage
-                            item.approxSizeMb    = rowRoot.approxSizeMb
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                anchors.bottom: parent.bottom
-                anchors.left:   parent.left
-                anchors.right:  parent.right
-                height: 1
-                color: appController.colorDivider
-            }
-        }
-    }
-
-    // One engine group within a category tab: a titled GroupBox with bulk actions plus a
-    // Repeater of asset rows for that (category, engine) pair.
-    Component {
-        id: engineGroupComp
-
-        GroupBox {
-            id: groupRoot
-            required property string category
-            required property string engineName
-
-            Layout.fillWidth: true
-            title: engineName
-            font.pixelSize: 12
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 4
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text {
-                        text: {
-                            var s = manageWin.statsFor(groupRoot.category, groupRoot.engineName)
-                            return s.downloaded + " of " + s.total + " downloaded"
-                        }
-                        font.pixelSize: 12
-                        color: appController.colorTextSecondary
-                        Layout.fillWidth: true
-                    }
-                    Button {
-                        text: "Download All"
-                        flat: true
-                        font.pixelSize: 12
-                        onClicked: manageWin.downloadAllInGroup(groupRoot.category, groupRoot.engineName)
-                    }
-                    Button {
-                        text: "Remove All"
-                        flat: true
-                        font.pixelSize: 12
-                        Material.foreground: appController.colorDanger
-                        onClicked: manageWin.removeAllInGroup(groupRoot.category, groupRoot.engineName)
-                    }
-                }
-
-                Repeater {
-                    model: manageWin.rowsFor(groupRoot.category, groupRoot.engineName)
-                    delegate: assetRowComp
-                }
-            }
-        }
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        color: appController.colorBackground
-        border.color: appController.colorDivider
-        border.width: 1
+    function askRemove(rows, what) {
+        var ids = rows.filter(r => r.downloaded).map(r => r.id)
+        if (ids.length === 0) return
+        confirmRemove.ids = ids
+        confirmRemove.message = "Remove " + what + " (" + ids.length + " model" + (ids.length === 1 ? "" : "s")
+            + ")? They download again the next time they're needed."
+        confirmRemove.open()
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        TitleBar {
+        Rectangle {
             Layout.fillWidth: true
-            window: manageWin
-            title: "Manage Models"
-        }
+            Layout.preferredHeight: bannerRow.implicitHeight + 2 * Theme.spaceMd
+            visible: banner.text.length > 0
+            color: Theme.dangerSoft
 
-        Text {
-            id: errorBanner
-            Layout.fillWidth: true
-            Layout.margins: 12
-            visible: false
-            wrapMode: Text.WordWrap
-            font.pixelSize: 12
-            color: appController.colorDanger
+            RowLayout {
+                id: bannerRow
+                anchors.fill: parent
+                anchors.margins: Theme.spaceMd
+                anchors.leftMargin: Theme.spaceXl
+                Icon { name: "error"; color: Theme.danger }
+                Text {
+                    id: banner
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    color: Theme.danger
+                }
+                AppButton {
+                    kind: "ghost"
+                    compact: true
+                    iconName: "cancel"
+                    toolTipText: "Dismiss"
+                    onClicked: banner.text = ""
+                }
+            }
         }
 
         TabBar {
-            id: modelsTabBar
-            Layout.fillWidth:       true
-            Layout.preferredHeight: 44
-
-            TabButton { text: "Transcription";   font.pixelSize: 12; implicitHeight: 44 }
-            TabButton { text: "Translation";     font.pixelSize: 12; implicitHeight: 44 }
-            TabButton { text: "Transliteration"; font.pixelSize: 12; implicitHeight: 44 }
+            id: tabBar
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spaceLg
+            Layout.topMargin: Theme.spaceSm
+            background: Item {}
+            Repeater {
+                model: manageWin.categories
+                delegate: TabButton {
+                    required property var modelData
+                    text: modelData.label
+                    width: implicitWidth + 24
+                    font.pixelSize: Theme.fontBody
+                }
+            }
         }
 
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+
         StackLayout {
-            Layout.fillWidth:  true
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: modelsTabBar.currentIndex
+            currentIndex: tabBar.currentIndex
 
             Repeater {
-                model: ["whisper", "translation", "transliteration"]
+                model: manageWin.categories
 
-                delegate: Flickable {
-                    id: tabRoot
-                    required property string modelData
-                    contentWidth:  width
-                    contentHeight: col.implicitHeight
+                delegate: ScrollView {
+                    id: tabPage
+                    required property var modelData
+                    contentWidth: availableWidth
+                    contentHeight: tabColumn.implicitHeight + 2 * Theme.spaceLg
                     clip: true
 
                     ColumnLayout {
-                        id: col
-                        anchors.left:    parent.left
-                        anchors.right:   parent.right
-                        anchors.margins: 20
-                        spacing: 16
+                        id: tabColumn
+                        x: Theme.spaceXl
+                        y: Theme.spaceLg
+                        width: tabPage.availableWidth - 2 * Theme.spaceXl
+                        spacing: Theme.spaceLg
 
-                        Item { implicitHeight: 4 }
-
-                        Repeater {
-                            // Each row carries its own category alongside the engine name, so
-                            // engineGroupComp's required properties bind directly at creation
-                            // (a plain array-of-strings model only auto-binds `modelData`).
-                            model: manageWin.enginesIn(tabRoot.modelData).map(
-                                e => ({ category: tabRoot.modelData, engineName: e }))
-                            delegate: engineGroupComp
+                        Text {
+                            Layout.fillWidth: true
+                            text: tabPage.modelData.hint
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            color: Theme.textMuted
+                            wrapMode: Text.WordWrap
                         }
 
-                        Item { implicitHeight: 4 }
+                        Repeater {
+                            model: manageWin.enginesIn(tabPage.modelData.key)
+
+                            delegate: Card {
+                                id: group
+                                required property string modelData
+                                readonly property var rows: manageWin.rowsFor(tabPage.modelData.key, group.modelData)
+                                readonly property int downloadedCount: group.rows.filter(r => r.downloaded).length
+
+                                Layout.fillWidth: true
+                                title: group.modelData
+                                description: group.downloadedCount + " of " + group.rows.length + " downloaded"
+                                trailing: [
+                                    AppButton {
+                                        compact: true
+                                        text: "Download all"
+                                        iconName: "download"
+                                        toolTipText: "Download every " + group.modelData + " model not yet on this computer"
+                                        enabled: group.downloadedCount < group.rows.length
+                                        onClicked: manageWin.downloadAllInGroup(tabPage.modelData.key, group.modelData)
+                                    },
+                                    AppButton {
+                                        compact: true
+                                        kind: "danger"
+                                        text: "Remove all"
+                                        toolTipText: "Delete every downloaded " + group.modelData + " model to free disk space"
+                                        enabled: group.downloadedCount > 0
+                                        onClicked: manageWin.askRemove(group.rows, "all " + group.modelData + " models")
+                                    }
+                                ]
+
+                                Repeater {
+                                    model: group.rows
+                                    delegate: AssetRow {}
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Rectangle {
-            Layout.fillWidth:       true
-            Layout.preferredHeight: 1
-            color: appController.colorDivider
-        }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.margins: 12
-            spacing: 10
+            Layout.margins: Theme.spaceMd
+            Layout.leftMargin: Theme.spaceXl
+            Layout.rightMargin: Theme.spaceLg
+            spacing: Theme.spaceSm
 
+            Icon { name: "library"; color: Theme.textMuted }
             Text {
-                text: "Total disk usage: " + manageWin.formatBytes(manageWin.totalBytes)
-                font.pixelSize: freeUpBtn.font.pixelSize
-                color: Material.foreground
                 Layout.fillWidth: true
+                text: "Disk space used by models: " + manageWin.formatBytes(manageWin.totalBytes)
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                color: Theme.text
             }
-            Button {
-                id: freeUpBtn
+            AppButton {
+                kind: "danger"
                 text: "Free up space"
-                flat: true
-                font.pixelSize: 12
+                iconName: "delete"
+                toolTipText: "Remove every downloaded model"
                 enabled: manageWin.totalBytes > 0
-                Material.foreground: appController.colorDanger
-                onClicked: manageWin.removeAllDownloaded()
+                onClicked: manageWin.askRemove(manageWin.catalog, "every downloaded model")
             }
-            Button {
+            AppButton {
+                kind: "primary"
                 text: "Close"
-                font.pixelSize: 12
-                Layout.preferredHeight: 36
+                toolTipText: "Downloads keep running after this window closes"
                 onClicked: manageWin.close()
+            }
+        }
+    }
+
+    // One catalog row: name, size, and an action area that matches its download state.
+    component AssetRow: Rectangle {
+        id: row
+        required property var modelData
+        required property int index
+
+        readonly property string dlState: row.modelData.downloadState
+        readonly property real approxBytes: row.modelData.approxSizeMb * 1024 * 1024
+        // The static known size is a stable denominator: a multi-file repo's live total grows as
+        // each file starts, which made percentages jump backwards.
+        readonly property real totalBytes: row.approxBytes > 0 ? row.approxBytes : row.modelData.progressTotal
+        readonly property real fraction: row.totalBytes > 0 ? Math.min(1, row.modelData.progressDone / row.totalBytes) : 0
+
+        Layout.fillWidth: true
+        implicitHeight: 52
+        radius: Theme.radius
+        color: row.index % 2 === 0 ? Theme.surfaceAlt : "transparent"
+
+        Accessible.role: Accessible.ListItem
+        Accessible.name: row.modelData.label + ", " + (row.modelData.downloaded ? "downloaded" : row.dlState === "idle" ? "not downloaded" : row.dlState)
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spaceMd
+            anchors.rightMargin: Theme.spaceSm
+            spacing: Theme.spaceMd
+
+            Icon {
+                name: row.modelData.downloaded ? "completed" : "download"
+                color: row.modelData.downloaded ? Theme.success : Theme.textMuted
+            }
+            Text {
+                Layout.fillWidth: true
+                text: row.modelData.label
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                font.weight: Font.DemiBold
+                color: Theme.text
+                elide: Text.ElideRight
+            }
+            Text {
+                Layout.preferredWidth: 80
+                horizontalAlignment: Text.AlignRight
+                text: row.modelData.downloaded ? manageWin.formatBytes(row.modelData.sizeBytes)
+                    : (row.approxBytes > 0 ? "about " + manageWin.formatBytes(row.approxBytes) : "-")
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
+                color: Theme.textMuted
+            }
+
+            // Downloading or queued
+            RowLayout {
+                Layout.preferredWidth: 240
+                visible: row.dlState !== "idle"
+                spacing: Theme.spaceSm
+                ProgressBar {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 1
+                    value: row.fraction
+                    indeterminate: row.dlState === "queued" || row.totalBytes === 0
+                    Accessible.name: row.modelData.label + " download progress"
+                }
+                Text {
+                    Layout.preferredWidth: 70
+                    text: row.dlState === "queued" ? "Queued" : (row.totalBytes > 0 ? Math.round(row.fraction * 100) + "%" : "Starting")
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    color: Theme.textMuted
+                }
+                AppButton {
+                    kind: "ghost"
+                    compact: true
+                    iconName: "cancel"
+                    toolTipText: "Cancel download of " + row.modelData.label
+                    onClicked: manageWin.cancelDownload(row.modelData.id)
+                }
+            }
+
+            AppButton {
+                visible: row.dlState === "idle" && !row.modelData.downloaded
+                compact: true
+                text: "Download"
+                iconName: "download"
+                toolTipText: "Download once; works offline afterwards"
+                Accessible.name: "Download " + row.modelData.label
+                onClicked: manageWin.requestDownload(row.modelData.id)
+            }
+            AppButton {
+                visible: row.dlState === "idle" && row.modelData.downloaded
+                compact: true
+                kind: "danger"
+                text: "Remove"
+                toolTipText: "Delete from this computer; it downloads again the next time it is needed"
+                Accessible.name: "Remove " + row.modelData.label
+                onClicked: modelsController.removeAsset(row.modelData.id)
             }
         }
     }

@@ -1,4 +1,4 @@
-# test_defaults.py — sanity checks for ccgen.config.defaults
+# test_defaults.py - sanity checks for ccgen.config.defaults
 
 from ccgen.config.defaults import (
     LanguageOptions,
@@ -26,15 +26,16 @@ class TestGetDefaultSettings:
     def test_transliteration_section_keys_used_by_settings_service(self):
         settings = get_default_settings()
         transliteration = settings["transliteration"]
-        assert set(transliteration.keys()) == {
-            "enabled", "source", "target", "input_source", "engine",
-        }
+        assert set(transliteration.keys()) == {"source", "target", "engine"}
+
+    def test_translation_section_has_no_stage_switch(self):
+        assert set(get_default_settings()["translation"].keys()) == {"source_lang", "target_lang"}
 
     def test_output_section_keys_used_by_settings_service(self):
         settings = get_default_settings()
         output = settings["output"]
         assert set(output.keys()) == {
-            "srt", "vtt", "lrc", "ass", "sbv", "max_line_length", "max_lines",
+            "directory", "srt", "vtt", "lrc", "ass", "sbv", "max_line_length", "max_lines",
         }
 
 
