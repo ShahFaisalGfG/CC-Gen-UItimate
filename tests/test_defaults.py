@@ -1,4 +1,4 @@
-# test_defaults.py — sanity checks for ccgen.config.defaults
+# test_defaults.py - sanity checks for ccgen.config.defaults
 
 from ccgen.config.defaults import (
     LanguageOptions,
@@ -34,7 +34,7 @@ class TestGetDefaultSettings:
         settings = get_default_settings()
         output = settings["output"]
         assert set(output.keys()) == {
-            "srt", "vtt", "lrc", "ass", "sbv", "max_line_length", "max_lines",
+            "directory", "srt", "vtt", "lrc", "ass", "sbv", "max_line_length", "max_lines",
         }
 
 

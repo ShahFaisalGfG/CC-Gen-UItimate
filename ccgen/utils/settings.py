@@ -1,11 +1,14 @@
-# settings.py — settings persistence: load, save, and merge
+# settings.py - settings persistence: load, save, and merge
 
 import json
+import logging
 import os
 import sys
 from typing import Any
 
 from ccgen.config.defaults import get_default_settings
+
+_log = logging.getLogger(__name__)
 
 
 def get_settings_file() -> str:
@@ -31,17 +34,29 @@ def load_settings() -> dict[str, Any]:
                 user = json.load(fh)
             return merge_settings(get_default_settings(), user)
         except Exception:
-            pass
+            _log.warning("Settings file %s is unreadable; using defaults", path, exc_info=True)
     return get_default_settings()
 
 
 def save_settings(settings: dict[str, Any]) -> bool:
-    """Persist a settings dictionary to disk. Returns True on success."""
+    """Persist a settings dictionary to disk atomically. Returns True on success.
+
+    Writes to a temporary file in the same folder and swaps it in, so a crash or a full disk
+    mid-write can never leave a truncated settings.json behind.
+    """
+    path = get_settings_file()
+    tmp_path = f"{path}.tmp"
     try:
-        with open(get_settings_file(), "w", encoding="utf-8") as fh:
+        with open(tmp_path, "w", encoding="utf-8") as fh:
             json.dump(settings, fh, indent=2)
+        os.replace(tmp_path, path)
         return True
     except Exception:
+        _log.error("Failed to save settings to %s", path, exc_info=True)
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
         return False
 
 

@@ -1,16 +1,24 @@
-# main.py — CLI entry point for CC-Gen-Ultimate (core testing without UI)
+# main.py - CLI entry point for CC-Gen-Ultimate (core testing without UI)
 
 import argparse
 import os
 import sys
 
-from ccgen.config.defaults import ModelDefaults, TranslationDefaults, TransliterationDefaults
+from ccgen.config.defaults import (
+    ComputeDefaults,
+    ModelDefaults,
+    OutputDefaults,
+    TranslationDefaults,
+    TransliterationDefaults,
+)
+from ccgen.utils.logging import configure_logging
 from ccgen.core.pipeline import Pipeline, PipelineConfig
 
 
 def main() -> None:
     """Parse CLI arguments and run the subtitle generation pipeline."""
     args = _parse_args()
+    configure_logging(enabled=False)
     config = _build_config(args)
     pipeline = Pipeline(config)
     try:
@@ -42,19 +50,19 @@ def _parse_args() -> argparse.Namespace:
         "--model",
         default=ModelDefaults.DEFAULT_MODEL,
         choices=ModelDefaults.SUPPORTED_MODELS,
-        help="Whisper model size (default: base)",
+        help=f"Whisper model (default: {ModelDefaults.DEFAULT_MODEL})",
     )
     p.add_argument(
         "--device",
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Compute device (default: cpu)",
+        default=ComputeDefaults.DEFAULT_DEVICE,
+        choices=ComputeDefaults.SUPPORTED_DEVICES,
+        help="Compute device; auto uses a CUDA GPU when available (default: auto)",
     )
     p.add_argument(
         "--compute-type",
-        default="int8",
-        choices=["int8", "float16", "float32"],
-        help="CTranslate2 compute type (default: int8)",
+        default=ComputeDefaults.DEFAULT_COMPUTE_TYPE,
+        choices=ComputeDefaults.SUPPORTED_COMPUTE_TYPES,
+        help="CTranslate2 compute type; auto picks float16 on GPU, int8 on CPU (default: auto)",
     )
     p.add_argument(
         "--language",
@@ -72,9 +80,26 @@ def _parse_args() -> argparse.Namespace:
         help="Translation target language code (default: en).",
     )
     p.add_argument(
+        "--formats",
+        default="srt",
+        help="Comma-separated subtitle formats: srt, vtt, ass, sbv, lrc (default: srt).",
+    )
+    p.add_argument(
         "--vtt",
         action="store_true",
-        help="Also emit a WebVTT (.vtt) subtitle file.",
+        help="Also emit a WebVTT (.vtt) subtitle file (same as adding vtt to --formats).",
+    )
+    p.add_argument(
+        "--max-line-length",
+        type=int,
+        default=OutputDefaults.MAX_LINE_LENGTH,
+        help=f"Characters per subtitle line (default: {OutputDefaults.MAX_LINE_LENGTH}).",
+    )
+    p.add_argument(
+        "--max-lines",
+        type=int,
+        default=OutputDefaults.MAX_LINES,
+        help=f"Lines per subtitle cue (default: {OutputDefaults.MAX_LINES}).",
     )
     p.add_argument(
         "--transliterate",
@@ -116,6 +141,13 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
     if not os.path.isfile(args.input):
         print(f"[ERROR] File not found: {args.input}", file=sys.stderr)
         sys.exit(1)
+    formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
+    if args.vtt:
+        formats.add("vtt")
+    unknown = formats - {"srt", "vtt", "ass", "sbv", "lrc"}
+    if unknown or not formats:
+        print(f"[ERROR] Unknown or missing formats: {', '.join(sorted(unknown)) or 'none'}", file=sys.stderr)
+        sys.exit(1)
     return PipelineConfig(
         input_path=os.path.abspath(args.input),
         output_dir=args.output_dir,
@@ -125,8 +157,13 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
         language=args.language,
         translate=args.translate,
         target_lang=args.target_lang,
-        emit_srt=True,
-        emit_vtt=args.vtt,
+        emit_srt="srt" in formats,
+        emit_vtt="vtt" in formats,
+        emit_ass="ass" in formats,
+        emit_sbv="sbv" in formats,
+        emit_lrc="lrc" in formats,
+        max_line_length=args.max_line_length,
+        max_lines=args.max_lines,
         transliterate=args.transliterate,
         translit_source=args.translit_source,
         translit_target=args.translit_target,

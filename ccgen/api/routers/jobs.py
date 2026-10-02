@@ -1,4 +1,4 @@
-# jobs.py — routes to start, poll, cancel, and stream transcription/translation jobs
+# jobs.py - routes to start, poll, cancel, and stream transcription/translation jobs
 
 import logging
 
@@ -48,6 +48,12 @@ def cancel_job(job_id: str) -> dict[str, bool]:
     if not _manager.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Unknown job id")
     return {"cancelled": True}
+
+
+@router.post("/jobs/release-models")
+def release_models() -> dict[str, bool]:
+    """Free cached models once the client's queue is done; refused while a job is running."""
+    return {"released": _manager.release_models()}
 
 
 @router.websocket("/jobs/{job_id}/stream")

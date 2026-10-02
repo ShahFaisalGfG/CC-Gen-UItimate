@@ -1,4 +1,4 @@
-# app.py — CC-Gen-Ultimate GUI entry point
+# app.py - CC-Gen-Ultimate GUI entry point
 
 import logging
 import os
@@ -6,7 +6,7 @@ import sys
 from multiprocessing import freeze_support
 from typing import Optional
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -20,14 +20,11 @@ from ccgen.controllers.transcription_ctrl import TranscriptionController
 from ccgen.ui.boot_thread import BootThread
 from ccgen.ui.splash_screen import SplashScreen
 from ccgen.utils.helpers import resource_path
+from ccgen.utils.logging import configure_from_settings
+from ccgen.utils.settings import load_settings
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-    stream=sys.stderr,
-)
 _log = logging.getLogger(__name__)
+_SHUTDOWN_WAIT_MS = 2000
 
 
 class _Startup:
@@ -35,7 +32,7 @@ class _Startup:
 
     def __init__(self, app: QApplication) -> None:
         self._app = app
-        self._input_paths = [p for p in sys.argv[1:] if os.path.isfile(p)]
+        self._input_paths = [p for p in sys.argv[1:] if os.path.exists(p)]
         self._engine: Optional[QQmlApplicationEngine] = None
         self._api_server = None
         self._app_ctrl = None
@@ -101,7 +98,7 @@ class _Startup:
             self._splash.close()
             if isinstance(root, QQuickWindow):
                 root.show()
-                _log.info("Window shown — %dx%d at (%d,%d)", root.width(), root.height(), root.x(), root.y())
+                _log.info("Window shown - %dx%d at (%d,%d)", root.width(), root.height(), root.x(), root.y())
             else:
                 _log.info("Window created (non-QQuickWindow root)")
         except Exception as e:
@@ -119,6 +116,13 @@ class _Startup:
     def shutdown(self) -> None:
         """Tear down the QML scene and controllers, then stop the API server."""
         try:
+            if self._trans_ctrl is not None:
+                self._trans_ctrl.shutdown()
+                # A cancelled folder scan exits within milliseconds; wait for it so its
+                # thread doesn't outlive the objects it reports to.
+                QThreadPool.globalInstance().waitForDone(_SHUTDOWN_WAIT_MS)
+            if self._assets_ctrl is not None:
+                self._assets_ctrl.close()
             self._engine = None
             self._app_ctrl = None
             self._trans_ctrl = None
@@ -133,6 +137,7 @@ class _Startup:
 def main() -> None:
     """Initialise the Qt application, show the splash, and boot the app in the background."""
     freeze_support()
+    configure_from_settings(load_settings())
     _log.info("Starting CC-Gen-Ultimate")
 
     os.environ.setdefault("QT_QPA_PLATFORM", "windows")

@@ -1,238 +1,130 @@
-# prefs_ctrl.py — preferences controller (HTTP client of the embedded API)
+# prefs_ctrl.py - preferences controller (HTTP client of the embedded API)
 
-import json
 from typing import Any
 
-from PySide6.QtCore import Property, QByteArray, QObject, QUrl, Signal, Slot
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from ccgen.config.defaults import (
+    ComputeDefaults,
     LanguageOptions,
-    LoggingDefaults,
     ModelDefaults,
+    OutputDefaults,
     TransliterationDefaults,
     get_default_settings,
 )
-from ccgen.utils.model_status import (
-    neural_translit_cached,
-    translation_pair_cached,
-    whisper_cached,
-)
+from ccgen.controllers.api_client import ApiClient
+
+
+def _items(pairs: list) -> list[dict[str, str]]:
+    """Convert (label, code) tuples into the {label, code} dicts QML combo boxes use."""
+    return [{"label": label, "code": code or ""} for label, code in pairs]
 
 
 class PrefsController(QObject):
-    """Exposes application preferences to QML, backed by the embedded API's /settings route."""
+    """Exposes saved preferences and option lists to QML, backed by the embedded API."""
 
-    settingsChanged   = Signal()
-    themeChanged      = Signal(str)
-    modelStatusChanged = Signal()
+    settingsChanged = Signal()
+    saveFinished = Signal(bool, str)  # (success, error message)
 
     def __init__(self, base_url: str, parent=None):
         super().__init__(parent)
-        self._base_url = base_url
-        self._net = QNetworkAccessManager(self)
+        self._api = ApiClient(base_url, self)
         self._settings: dict[str, Any] = get_default_settings()
-        self._fetch_settings()
+        self.loadSettings()
 
-    # ── Internal helpers ─────────────────────────────────────────────────────
+    # ── Saved settings ───────────────────────────────────────────────────────
 
-    def _get(self, *keys: str, default=None):
-        """Navigate nested settings keys and return the value or default."""
-        try:
-            val: Any = self._settings
-            for k in keys:
-                val = val[k]
-            return val
-        except Exception:
-            return default
-
-    def _fetch_settings(self) -> None:
-        """Asynchronously fetch the current settings from the embedded API."""
-        request = QNetworkRequest(QUrl(f"{self._base_url}/settings"))
-        reply = self._net.get(request)
-        reply.finished.connect(lambda: self._on_settings_fetched(reply))
-
-    def _on_settings_fetched(self, reply: QNetworkReply) -> None:
-        """Apply the fetched settings dictionary and notify QML."""
-        try:
-            reply.deleteLater()
-            if reply.error() != QNetworkReply.NetworkError.NoError:
-                return
-            self._settings = json.loads(bytes(reply.readAll().data()).decode("utf-8"))
-            self.settingsChanged.emit()
-            self.themeChanged.emit(str(self._get("ui", "theme", default="system")))
-        except Exception:
-            pass
-
-    # ── Constant option lists ────────────────────────────────────────────────
-
-    @Property(list, constant=True)
-    def themeOptions(self) -> list:
-        """Theme choices exposed to QML."""
-        return ["System", "Light", "Dark"]
-
-    @Property(list, constant=True)
-    def modelOptions(self) -> list:
-        """Whisper model names exposed to QML."""
-        return ModelDefaults.SUPPORTED_MODELS
-
-    @Property(list, constant=True)
-    def languageOptions(self) -> list:
-        """Transcription language options as list of {label, code} dicts."""
-        return [
-            {"label": label, "code": code if code else ""}
-            for label, code in LanguageOptions.TRANSCRIPTION
-        ]
-
-    @Property(list, constant=True)
-    def targetOptions(self) -> list:
-        """Translation target language options as list of {label, code} dicts."""
-        return [
-            {"label": label, "code": code}
-            for label, code in LanguageOptions.TRANSLATION_TARGETS
-        ]
-
-    @Property(list, constant=True)
-    def translitSchemeOptions(self) -> list:
-        """Transliteration scheme options as list of {label, code} dicts."""
-        return [
-            {"label": label, "code": code}
-            for label, code in TransliterationDefaults.SCHEMES
-        ]
-
-    @Property(list, constant=True)
-    def translitEngineOptions(self) -> list:
-        """Transliteration engine options as list of {label, code} dicts."""
-        return [
-            {"label": label, "code": code}
-            for label, code in TransliterationDefaults.ENGINES
-        ]
-
-    # ── Download status ──────────────────────────────────────────────────────
-
-    @Property("QVariantMap", notify=modelStatusChanged)  # type: ignore[arg-type]
-    def modelStatus(self) -> dict:
-        """Map of Whisper model name to whether it is already cached locally."""
-        return {name: whisper_cached(name) for name in ModelDefaults.SUPPORTED_MODELS}
-
-    @Slot()
-    def refreshModelStatus(self) -> None:
-        """Re-check Whisper model cache state and notify QML."""
-        self.modelStatusChanged.emit()
-
-    @Slot(str, str, result=bool)
-    def isTranslationReady(self, source: str, target: str) -> bool:
-        """Return True when an offline translation package for this pair is installed."""
-        return translation_pair_cached(source, target)
-
-    @Slot(str, str, result=bool)
-    def isNeuralReady(self, source: str, target: str) -> bool:
-        """Return True when the neural transliteration backend for this pair is cached."""
-        return neural_translit_cached(source, target)
-
-    # ── Persisted settings properties ────────────────────────────────────────
-
-    @Property(str, notify=themeChanged)
-    def theme(self) -> str:
-        return str(self._get("ui", "theme", default="system"))
-
-    @Property(str, notify=settingsChanged)
-    def defaultModel(self) -> str:
-        return str(self._get("model", "name", default=ModelDefaults.DEFAULT_MODEL))
-
-    @Property(bool, notify=settingsChanged)
-    def enableLogs(self) -> bool:
-        return bool(self._get("logging", "enable_logs", default=LoggingDefaults.ENABLE_LOGS))
-
-    @Property(str, notify=settingsChanged)
-    def logLevel(self) -> str:
-        return str(self._get("logging", "log_level", default=LoggingDefaults.DEFAULT_LOG_LEVEL))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultEmitSrt(self) -> bool:
-        return bool(self._get("output", "srt", default=True))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultEmitVtt(self) -> bool:
-        return bool(self._get("output", "vtt", default=False))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultEmitLrc(self) -> bool:
-        return bool(self._get("output", "lrc", default=False))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultEmitAss(self) -> bool:
-        return bool(self._get("output", "ass", default=False))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultEmitSbv(self) -> bool:
-        return bool(self._get("output", "sbv", default=False))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultTranslateEnabled(self) -> bool:
-        return bool(self._get("translation", "enabled", default=False))
-
-    @Property(str, notify=settingsChanged)
-    def defaultTranslateTarget(self) -> str:
-        return str(self._get("translation", "target_lang", default="en"))
-
-    @Property(bool, notify=settingsChanged)
-    def defaultTransliterateEnabled(self) -> bool:
-        return bool(self._get("transliteration", "enabled", default=False))
-
-    @Property(str, notify=settingsChanged)
-    def defaultTranslitSource(self) -> str:
-        return str(self._get("transliteration", "source", default="roman"))
-
-    @Property(str, notify=settingsChanged)
-    def defaultTranslitTarget(self) -> str:
-        return str(self._get("transliteration", "target", default="ur"))
-
-    @Property(str, notify=settingsChanged)
-    def defaultTranslitInput(self) -> str:
-        return str(self._get("transliteration", "input_source", default="transcription"))
-
-    @Property(str, notify=settingsChanged)
-    def defaultTranslitEngine(self) -> str:
-        return str(self._get("transliteration", "engine", default="rule"))
-
-    # ── Slots ─────────────────────────────────────────────────────────────────
+    @Property("QVariantMap", notify=settingsChanged)  # type: ignore[arg-type]
+    def settings(self) -> dict:
+        """The full saved settings dictionary, grouped by section."""
+        return self._settings
 
     @Slot()
     def loadSettings(self) -> None:
         """Re-fetch settings from the embedded API and notify QML."""
-        self._fetch_settings()
+        self._api.get("/settings", self._on_settings)
 
-    @Slot(str, "QVariant")
-    def setSetting(self, key: str, value: Any) -> None:
-        """PUT a dot-separated key/value update to the embedded API."""
-        try:
-            body = QByteArray(json.dumps({"key": key, "value": value}).encode("utf-8"))
-            request = QNetworkRequest(QUrl(f"{self._base_url}/settings"))
-            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
-            reply = self._net.put(request, body)
-            reply.finished.connect(lambda: self._on_setting_saved(reply, key, value))
-        except Exception:
-            pass
-
-    def _on_setting_saved(self, reply: QNetworkReply, key: str, value: Any) -> None:
-        """Apply the server's updated settings snapshot and notify QML."""
-        try:
-            reply.deleteLater()
-            if reply.error() == QNetworkReply.NetworkError.NoError:
-                self._settings = json.loads(bytes(reply.readAll().data()).decode("utf-8"))
-            self.settingsChanged.emit()
-            if key in ("ui.theme", "theme"):
-                self.themeChanged.emit(str(value))
-        except Exception:
-            pass
+    @Slot("QVariantMap")
+    def saveSettings(self, values: dict) -> None:
+        """Save several dot-separated keys (e.g. {"model.name": "small"}) in one atomic write."""
+        self._api.patch("/settings", {"values": dict(values)}, self._on_saved)
 
     @Slot()
     def resetDefaults(self) -> None:
-        """Reset all settings to factory defaults via the embedded API."""
-        try:
-            request = QNetworkRequest(QUrl(f"{self._base_url}/settings/reset"))
-            reply = self._net.post(request, QByteArray())
-            reply.finished.connect(lambda: self._on_settings_fetched(reply))
-        except Exception:
-            pass
+        """Reset every preference to its factory default."""
+        self._api.post("/settings/reset", None, self._on_saved)
+
+    def _on_settings(self, data: Any, error: str) -> None:
+        """Apply a fetched settings snapshot."""
+        if not error and isinstance(data, dict):
+            self._settings = data
+            self.settingsChanged.emit()
+
+    def _on_saved(self, data: Any, error: str) -> None:
+        """Apply the server's updated snapshot and report the outcome."""
+        self._on_settings(data, error)
+        self.saveFinished.emit(not error, error)
+
+    # ── Option lists ─────────────────────────────────────────────────────────
+
+    @Property(list, constant=True)
+    def themeOptions(self) -> list:
+        """Theme choices."""
+        return _items([("System (follow Windows)", "system"), ("Light", "light"), ("Dark", "dark")])
+
+    @Property(list, constant=True)
+    def modelOptions(self) -> list:
+        """Whisper models with size and a short speed/accuracy note."""
+        return [
+            {
+                "label": f"{name} - {ModelDefaults.MODEL_NOTES[name]}",
+                "code": name,
+                "sizeMb": ModelDefaults.MODEL_SIZES_MB[name],
+            }
+            for name in ModelDefaults.SUPPORTED_MODELS
+        ]
+
+    @Property(list, constant=True)
+    def deviceOptions(self) -> list:
+        """Compute device choices for transcription."""
+        return _items(ComputeDefaults.DEVICES)
+
+    @Property(list, constant=True)
+    def languageOptions(self) -> list:
+        """Transcription languages; code "" means auto-detect."""
+        return _items(LanguageOptions.TRANSCRIPTION)
+
+    @Property(list, constant=True)
+    def targetOptions(self) -> list:
+        """Translation target languages."""
+        return _items(LanguageOptions.TRANSLATION_TARGETS)
+
+    @Property(list, constant=True)
+    def translitSchemeOptions(self) -> list:
+        """Transliteration scripts."""
+        return _items(TransliterationDefaults.SCHEMES)
+
+    @Property(list, constant=True)
+    def translitEngineOptions(self) -> list:
+        """Transliteration engines."""
+        return _items(TransliterationDefaults.ENGINES)
+
+    @Property(list, constant=True)
+    def translitInputOptions(self) -> list:
+        """Which text transliteration starts from."""
+        return _items([("Transcription", "transcription"), ("Translation", "translation")])
+
+    @Property(list, constant=True)
+    def logLevelOptions(self) -> list:
+        """Log detail levels."""
+        return _items([("Warnings and errors", "critical"), ("Everything (for troubleshooting)", "all")])
+
+    @Property(list, constant=True)
+    def lineLengthRange(self) -> list:
+        """Allowed [min, max] characters per subtitle line."""
+        return list(OutputDefaults.MAX_LINE_LENGTH_RANGE)
+
+    @Property(list, constant=True)
+    def maxLinesRange(self) -> list:
+        """Allowed [min, max] lines per subtitle cue."""
+        return list(OutputDefaults.MAX_LINES_RANGE)

@@ -1,8 +1,8 @@
-# job.py — request/response contracts for starting and tracking pipeline jobs
+# job.py - request contract for starting pipeline jobs
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ccgen.config.defaults import (
     ComputeDefaults,
@@ -31,6 +31,13 @@ class JobConfig(BaseModel):
     emit_lrc: bool = OutputDefaults.FORMAT_LRC
     emit_ass: bool = OutputDefaults.FORMAT_ASS
     emit_sbv: bool = OutputDefaults.FORMAT_SBV
+    max_line_length: int = Field(
+        OutputDefaults.MAX_LINE_LENGTH,
+        ge=OutputDefaults.MAX_LINE_LENGTH_RANGE[0], le=OutputDefaults.MAX_LINE_LENGTH_RANGE[1],
+    )
+    max_lines: int = Field(
+        OutputDefaults.MAX_LINES, ge=OutputDefaults.MAX_LINES_RANGE[0], le=OutputDefaults.MAX_LINES_RANGE[1],
+    )
     beam_size: int = TranscriptionDefaults.BEAM_SIZE
     vad_filter: bool = TranscriptionDefaults.VAD_FILTER
     transliterate: bool = TransliterationDefaults.ENABLED
@@ -38,13 +45,3 @@ class JobConfig(BaseModel):
     translit_target: str = TransliterationDefaults.DEFAULT_TARGET
     translit_input: str = TransliterationDefaults.INPUT_SOURCE
     translit_engine: str = TransliterationDefaults.DEFAULT_ENGINE
-
-
-class JobStatus(BaseModel):
-    """Snapshot of a job's current state, for polling clients."""
-
-    job_id: str
-    busy: bool
-    success: Optional[bool] = None
-    error: Optional[str] = None
-    output_files: list[str] = []

@@ -19,7 +19,7 @@ CC-Gen-Ultimate is a **free, open-source** desktop app that turns any video or a
 
 > *Your media. Your machine. Your subtitles.*
 
-> 🚧 **Status:** in active development. The Windows release (installers + GitHub Releases) is targeted for **August 2026**, with a [winget](#download--install) package to follow shortly after. See the [Roadmap](#roadmap) for what's next, including Linux, macOS, and Android.
+> **Status:** version 1.0.0 is the first Windows release (installers on GitHub Releases), with a [winget](#download--install) package to follow. See the [Roadmap](#roadmap) for what's next, including Linux, macOS, and Android.
 
 ---
 
@@ -73,29 +73,31 @@ If you've ever thought *"I just need subtitles for this file, without uploading 
 Most auto-captioning tools are cloud services in disguise: upload your file, wait in a queue, pay per minute, and hope nothing sensitive was in the audio. CC-Gen-Ultimate runs the entire pipeline - transcription, translation, and transliteration - on your own hardware.
 
 - 🔒 **100% offline** - no accounts, no cloud sync, no telemetry, models download once and never again
-- 🎙️ **Whisper-accurate transcription** - powered by `faster-whisper`, from a 75 MB `tiny` model up to `large-v3`
+- 🎙️ **Whisper-accurate transcription** - powered by `faster-whisper`, from a 75 MB `tiny` model up to `large-v3`, including the fast `large-v3-turbo`, on CPU or NVIDIA GPU
 - 🌍 **Built-in translation** - 10 target languages via fully offline neural machine translation
 - ✍️ **Real Roman Urdu, not academic transliteration** - a dedicated converter tuned for colloquial spelling ("kya haal hai", not diacritic-laden Sanskrit-style romanization)
 - 🔀 **Two transliteration engines** - a fast rule-based converter and an optional neural engine for higher-quality output, your choice
 - 🎨 **Modern, clean UI** - PySide6 + QML with System, Light, and Dark themes
 - 📦 **Two install modes** - system-wide and per-user (no admin required)
-- 📺 **Live progress** - watch each subtitle segment appear as it's transcribed, no black-box waiting
+- 📺 **Live progress** - watch each subtitle and its translation appear as it's produced, no black-box waiting
 
 ---
 
 ## Features
 
-- **Transcription** - drag in video/audio files, get word-timestamped subtitles via `faster-whisper` (CPU, `int8` by default; CUDA supported)
-- **Translation** - optionally translate the transcript into any of 10 supported languages, fully offline via `argostranslate`, models auto-downloaded once
+- **Transcription** - drag in video/audio files, get word-timestamped subtitles via `faster-whisper`; runs on an NVIDIA GPU automatically when CUDA is available, otherwise on the CPU
+- **Readable subtitle layout** - speech is split into cues of up to two balanced 42-character lines, breaking at sentence ends, commas, and pauses, with a comfortable minimum display time and no overlapping cues (line length and line count are configurable)
+- **Translation** - optionally translate the transcript into any of 10 supported languages, fully offline via `argostranslate`, models auto-downloaded once; whole sentences are translated and mapped back onto the subtitle timing, and pairs without a direct package are bridged through English
 - **Transliteration** - optionally convert the transcript (or its translation) between 14 scripts, including a purpose-built Urdu ⇄ Roman Urdu converter
 - **Dual transliteration engines** - switch between a lightweight rule-based engine and a higher-quality neural engine per job or as a global default
-- **Multi-file queue** - add files or entire folders, process them sequentially, drag-and-drop supported
+- **Multi-file queue** - add files or entire folders (including subfolders; thousands of files load in about a second), drag-and-drop supported; files run one after another with per-file progress and errors, and Cancel keeps the rest of the queue for later
 - **Batch-friendly formats** - accepts MP4, MKV, AVI, MOV, WebM, FLV, WMV, TS, M2TS, MP3, WAV, M4A, FLAC, AAC, OGG, WMA, and existing SRT/VTT files (for re-translating or re-transliterating subtitles you already have)
-- **Standard subtitle output** - SRT and/or WebVTT, line-wrapped to readable lengths
+- **Standard subtitle output** - SRT, WebVTT, ASS, SBV (YouTube), and LRC, saved next to each source file or in a folder you choose
 - **Live segment streaming** - transcribed lines appear in the UI in real time as they're produced
 - **Global Settings** - persisted defaults for model, language, translation, and transliteration (including engine choice), so new jobs start exactly how you like them
-- **Detailed logging** - critical-only or full activity logs saved locally
-- **Live theme switching** - System / Light / Dark with instant preview
+- **Detailed logging** - warnings-only or full activity logs saved locally, openable and clearable from Preferences
+- **Live theme switching** - System / Light / Dark, following Windows changes while the app is open
+- **Keyboard friendly** - every action has a shortcut or is reachable with Tab, with visible focus and tooltips on every control
 
 ---
 
@@ -124,14 +126,26 @@ The first Windows models (`faster-whisper`, `argostranslate`, and transliteratio
 
 ## Quick Start
 
-1. **Add files** - drag & drop onto the window, or use **+ Files** / **+ Folder**
+1. **Add files** - drag & drop files or folders onto the window, or use **Add files** / **Add folder**
 2. **Choose a model** - `base` is the default and a good balance of speed and accuracy; see [Whisper Model Sizes](#whisper-model-sizes)
 3. **Pick a language** - or leave it on auto-detect
-4. **Optionally translate** - turn on **Translate** and pick a target language
-5. **Optionally transliterate** - turn on **Transliterate**, pick source/target scripts, and choose whether to convert the transcript or the translation
-6. **Start** - click **▶ Start** and watch segments stream in live
+4. **Optionally translate** - turn on **Translation** and pick a target language
+5. **Optionally transliterate** - turn on **Transliteration**, pick source/target scripts, and choose whether to convert the transcript or the translation
+6. **Start** - click **Start** (or press **Ctrl+Enter**) and watch subtitles stream into the **Transcript** tab
 
-Output files are written next to the input, named by what they contain: `video.srt` (original), `video_ur.srt` (translated to Urdu), `video_tr_ur_roman.srt` (transliterated Urdu → Roman).
+Output files are written next to the input (or to the folder chosen under **Output > Save to**), named by what they contain: `video.srt` (original), `video_ur.srt` (translated to Urdu), `video_tr_ur_roman.srt` (transliterated Urdu → Roman). When the run ends, **Open output folder** takes you straight to them.
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| **Ctrl+O** / **Ctrl+Shift+O** | Add files / add a folder |
+| **Ctrl+Enter** or **F5** | Start processing the queue |
+| **Esc** | Cancel (the remaining files stay queued) |
+| **Ctrl+1** / **Ctrl+2** | Settings / Transcript tab |
+| **Ctrl+,** / **Ctrl+M** / **F1** | Preferences / Manage Models / About |
+| **Up/Down**, **Shift+Up/Down**, **Space**, **Ctrl+A**, **Delete** | Move, extend, toggle, select all, and remove files in the queue |
+| **Menu key** or **Shift+F10** | Context menu for the current file |
 
 ---
 
@@ -148,9 +162,11 @@ Input file (video/audio)
   │
   ▼ Extract audio (ffmpeg, 16 kHz mono WAV)
   │
-  ▼ Transcribe (faster-whisper) ──── live segments stream into the UI
+  ▼ Transcribe (faster-whisper) ──── live subtitles stream into the UI
   │
-  ├─ [optional] Translate (argostranslate) ─────────► video_<lang>.srt
+  ▼ Split into readable cues (word timings, sentence ends, pauses) ──► video.srt
+  │
+  ├─ [optional] Translate whole sentences (argostranslate) ──► video_<lang>.srt
   │
   └─ [optional] Transliterate (rule or neural engine) ─► video_tr_<source>_<target>.srt
 ```
@@ -163,6 +179,7 @@ Input file (video/audio)
 | **base** | **145 MB** | **Fast** | **Default - good balance** |
 | small | 466 MB | Moderate | Good |
 | medium | 1.5 GB | Slow | High |
+| large-v3-turbo | 1.6 GB | Moderate | Near-best - recommended with a GPU |
 | large-v3 | 3.0 GB | Very slow | Best |
 
 ### Supported Languages & Scripts
@@ -201,15 +218,16 @@ CC-Gen-Ultimate's UI talks to a small local backend embedded in the same app pro
 
 ## Settings & Preferences
 
-| Tab | Contents |
+| Section | Contents |
 |---|---|
 | **Appearance** | Theme: System / Light / Dark |
-| **Transcription** | Default Whisper model, default output formats (SRT/VTT) |
+| **Transcription** | Default model and spoken language, compute device (Automatic / CPU / NVIDIA GPU), skip silence and music (voice activity filter) |
 | **Translation** | Default enabled state, default target language |
 | **Transliteration** | Default enabled state, default source/target script, default input source, default engine (rule/neural) |
-| **Advanced** | Logging on/off, log level (critical/all), clear logs |
+| **Subtitles** | Default formats, characters per line, lines per subtitle, default save folder |
+| **Advanced** | Logging on/off, log detail (warnings and errors / everything), open or clear the log files |
 
-All settings persist to `%APPDATA%\CC-Gen-Ultimate\settings.json` and apply to every new job automatically.
+All settings persist to `%APPDATA%\CC-Gen-Ultimate\settings.json` and apply to every new job automatically. Logs are written to `%APPDATA%\CC-Gen-Ultimate\logs`.
 
 ---
 
@@ -239,7 +257,8 @@ pip install -r requirements.txt
 python app.py
 
 # ...or drive the core pipeline without a UI
-python main.py path\to\video.mp4 --model tiny --translate --target-lang ur
+python main.py path\to\video.mp4 --model base --translate --target-lang ur --formats srt,vtt
+python main.py --help   # all options: device, line limits, transliteration, output folder
 ```
 
 ### Running Tests & Checks
@@ -247,7 +266,7 @@ python main.py path\to\video.mp4 --model tiny --translate --target-lang ur
 ```powershell
 pytest tests/ -v
 pyright ccgen/ app.py main.py server.py
-qmllint ccgen/qml/main.qml ccgen/qml/PreferencesWindow.qml ccgen/qml/components/*.qml
+cd ccgen/qml; pyside6-qmllint -I components main.qml PreferencesWindow.qml ManageModelsWindow.qml components/*.qml
 ```
 
 ---
@@ -259,7 +278,10 @@ qmllint ccgen/qml/main.qml ccgen/qml/PreferencesWindow.qml ccgen/qml/components/
 | First run is slow | The selected Whisper/translation/transliteration model is downloading - this only happens once per model |
 | Translation/transliteration fails with a language-pair error | Not every language pair has a pre-trained offline model; try translating to/from English as an intermediate step |
 | GUI window doesn't appear | Check the log output for "Embedded API server failed to start" - another process may be holding the local port |
-| Slow transcription on CPU | Use a smaller model (`tiny`/`base`), or enable CUDA if you have a supported Nvidia GPU |
+| Slow transcription on CPU | Use a smaller model (`base`/`small`), or `large-v3-turbo` on an NVIDIA GPU |
+| GPU isn't used | Install the CUDA 12 and cuDNN 9 runtime libraries; with **Run on: Automatic** the app falls back to the CPU when they're missing (the status line shows "Model ready (CPU)") |
+| Cancel takes a few seconds | Transcription stops at the end of the current 30-second audio window; the status shows "Cancelling..." until then |
+| A file shows "Failed" | Hover it to read the error; failed files run again on the next Start |
 
 Still stuck? [Open an issue](https://github.com/ShahFaisalGfG/CC-Gen-UItimate/issues) with your log output and CC-Gen-Ultimate version - I'll get back to you.
 
@@ -285,7 +307,7 @@ For significant changes, please [open an issue](https://github.com/ShahFaisalGfG
 
 | Target | Plan |
 |---|---|
-| **August 2026** | Initial Windows release - system & user Inno Setup installers on GitHub Releases |
+| **v1.0.0** | Initial Windows release - system & user Inno Setup installers on GitHub Releases |
 | **Shortly after** | `winget` package submission |
 | **Later** | Linux packages (Flatpak / AppImage) |
 | **Later** | macOS package (`.dmg` / Homebrew) |

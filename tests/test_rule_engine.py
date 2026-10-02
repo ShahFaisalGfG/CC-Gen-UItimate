@@ -1,4 +1,4 @@
-# test_rule_engine.py — unit tests for ccgen.engines.transliteration.rule_engine
+# test_rule_engine.py - unit tests for ccgen.engines.transliteration.rule_engine
 
 import pytest
 
@@ -87,11 +87,13 @@ class TestProgressCallbacks:
         engine.transliterate_segments(segments, progress_num_cb=lambda done, total: calls.append((done, total)))
         assert calls == [(1, 2), (2, 2)]
 
-    def test_progress_cb_called_with_message(self):
+    def test_no_per_segment_status_messages(self):
+        # Per-segment chatter used to overwrite the stage label in the UI; progress is
+        # reported numerically through progress_num_cb instead.
         engine = RuleEngine("ur", "roman")
         messages = []
         engine.transliterate_segments([_segment("کیا")], progress_cb=messages.append)
-        assert messages == ["Transliterated segment 1"]
+        assert messages == []
 
     def test_no_callbacks_required(self):
         engine = RuleEngine("ur", "roman")

@@ -1,4 +1,4 @@
-# test_asset_registry.py — unit tests for ccgen.utils.asset_registry
+# test_asset_registry.py - unit tests for ccgen.utils.asset_registry
 
 from unittest.mock import MagicMock, patch
 
@@ -53,7 +53,7 @@ class TestListAssets:
         whisper = [a for a in assets if a["category"] == CATEGORY_WHISPER]
         translation = [a for a in assets if a["category"] == CATEGORY_TRANSLATION]
         translit = [a for a in assets if a["category"] == CATEGORY_TRANSLITERATION]
-        assert len(whisper) == 5
+        assert len(whisper) == 6
         assert len(translation) == 9  # 10 supported targets minus the degenerate English→English
         assert len(translit) == 3
         assert all(a["downloaded"] is False and a["size_bytes"] is None for a in assets)
@@ -154,7 +154,7 @@ class TestListAssets:
             ):
                 with patch(
                     "ccgen.utils.asset_registry.model_status.neural_translit_cached",
-                    side_effect=lambda s, t: (s, t) == ("roman", "ur"),
+                    side_effect=lambda s, t, cache_info=None: (s, t) == ("roman", "ur"),
                 ):
                     with patch("ccgen.utils.asset_registry.scan_cache_dir", return_value=cache):
                         assets = list_assets()

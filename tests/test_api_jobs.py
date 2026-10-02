@@ -39,6 +39,8 @@ def _default_run(status_cb, segment_cb, progress_num_cb):
 def _fake_pipeline_cls(prepare_side_effect=None, run_side_effect=None):
     """Build a fake Pipeline class whose instances invoke the callbacks job_manager passes in."""
     instance = MagicMock()
+    instance.cancelled = False
+    instance.cancel.side_effect = lambda: setattr(instance, "cancelled", True)
     instance.prepare.side_effect = prepare_side_effect or (lambda status_cb, progress_num_cb: None)
     instance.run.side_effect = run_side_effect or _default_run
     return MagicMock(return_value=instance), instance
@@ -111,6 +113,7 @@ class TestStreamJob:
 
         assert [e["event"] for e in events] == ["segment", "progress", "finished"]
         assert events[0]["text"] == "hi"
+        assert events[0]["kind"] == "transcript"
         assert events[1] == {"event": "progress", "done": 1, "total": 1}
         assert events[2] == {
             "event": "finished", "success": True, "error": "", "output_files": ["out.srt"],
@@ -149,3 +152,51 @@ class TestCancelJob:
             "error": "Cancelled by user.", "output_files": [],
         }
         instance.run.assert_not_called()
+
+    def test_cancel_during_run_signals_the_pipeline(self, client, tmp_path):
+        run_started = threading.Event()
+
+        def cancellable_run(status_cb, segment_cb, progress_num_cb):
+            run_started.set()
+            for _ in range(500):
+                if instance.cancelled:
+                    return PipelineResult(
+                        success=False, input_path="in.mp4", error="Cancelled by user.", cancelled=True,
+                    )
+                threading.Event().wait(0.01)
+            raise AssertionError("cancel never reached the running pipeline")
+
+        pipeline_cls, instance = _fake_pipeline_cls(run_side_effect=cancellable_run)
+        with patch("ccgen.api.services.job_manager.Pipeline", pipeline_cls):
+            job_id = _start_job(client, tmp_path)
+            assert run_started.wait(timeout=5)
+            assert client.post(f"/jobs/{job_id}/cancel").json() == {"cancelled": True}
+            with client.websocket_connect(f"/jobs/{job_id}/stream") as ws:
+                events = _collect_until_finished(ws)
+
+        assert events[-1]["error"] == "Cancelled by user."
+        instance.cancel.assert_called_once()
+
+
+class TestReleaseModels:
+    def test_releases_when_idle(self, client):
+        with patch("ccgen.api.services.job_manager.model_cache.release_all") as release_all:
+            assert client.post("/jobs/release-models").json() == {"released": True}
+        release_all.assert_called_once()
+
+    def test_refused_while_job_running(self, client, tmp_path):
+        run_can_finish = threading.Event()
+
+        def blocking_run(status_cb, segment_cb, progress_num_cb):
+            run_can_finish.wait(timeout=5)
+            return PipelineResult(success=True, input_path="in.mp4")
+
+        pipeline_cls, _ = _fake_pipeline_cls(run_side_effect=blocking_run)
+        with patch("ccgen.api.services.job_manager.Pipeline", pipeline_cls):
+            job_id = _start_job(client, tmp_path)
+            with patch("ccgen.api.services.job_manager.model_cache.release_all") as release_all:
+                assert client.post("/jobs/release-models").json() == {"released": False}
+            release_all.assert_not_called()
+            run_can_finish.set()
+            with client.websocket_connect(f"/jobs/{job_id}/stream") as ws:
+                _collect_until_finished(ws)

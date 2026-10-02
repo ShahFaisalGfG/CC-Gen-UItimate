@@ -1,4 +1,4 @@
-# settings.py — request contract for updating a single persisted setting
+# settings.py - request contract for updating a single persisted setting
 
 from typing import Any
 
@@ -10,3 +10,9 @@ class SettingsPayload(BaseModel):
 
     key: str
     value: Any
+
+
+class SettingsBatchPayload(BaseModel):
+    """Several dot-separated settings keys saved together in one write."""
+
+    values: dict[str, Any]

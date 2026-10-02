@@ -1,7 +1,18 @@
-# conftest.py — shared pytest fixtures
+# conftest.py - shared pytest fixtures
 
 import os
+
 import pytest
+
+from ccgen.engines import model_cache
+
+
+@pytest.fixture(autouse=True)
+def _fresh_model_caches():
+    """Clear the shared model caches so a model mocked in one test never leaks into another."""
+    model_cache.release_all()
+    yield
+    model_cache.release_all()
 
 
 @pytest.fixture

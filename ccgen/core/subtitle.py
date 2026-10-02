@@ -1,10 +1,11 @@
-# subtitle.py — SRT, VTT, LRC, ASS, and SBV subtitle generation from timestamped segment data
+# subtitle.py - SRT, VTT, LRC, ASS, and SBV subtitle generation from timestamped segment data
 
+import math
 import os
-from typing import Union
+from typing import Iterator, Optional, Union
 
 from ccgen.config.defaults import OutputDefaults
-from ccgen.core import Segment, TranslatedSegment, TransliteratedSegment
+from ccgen.core import AnySegment, Segment, TranslatedSegment, TransliteratedSegment
 
 SubtitleSource = Union[list[Segment], list[TranslatedSegment], list[TransliteratedSegment]]
 
@@ -13,13 +14,15 @@ def write_srt(
     segments: SubtitleSource,
     output_path: str,
     translated: bool = False,
+    max_line_length: int = OutputDefaults.MAX_LINE_LENGTH,
+    max_lines: int = OutputDefaults.MAX_LINES,
 ) -> str:
     """Write an SRT subtitle file from segments. Returns output_path.
 
     Uses the 'translated' field when translated=True, otherwise uses 'text'.
     """
     try:
-        lines = _build_srt(segments, translated)
+        lines = _build_srt(segments, translated, (max_line_length, max_lines))
         _write_file(output_path, lines)
         return output_path
     except OSError:
@@ -32,13 +35,15 @@ def write_vtt(
     segments: SubtitleSource,
     output_path: str,
     translated: bool = False,
+    max_line_length: int = OutputDefaults.MAX_LINE_LENGTH,
+    max_lines: int = OutputDefaults.MAX_LINES,
 ) -> str:
     """Write a WebVTT subtitle file from segments. Returns output_path.
 
     Uses the 'translated' field when translated=True, otherwise uses 'text'.
     """
     try:
-        lines = ["WEBVTT", ""] + _build_vtt_cues(segments, translated)
+        lines = ["WEBVTT", ""] + _build_vtt_cues(segments, translated, (max_line_length, max_lines))
         _write_file(output_path, lines)
         return output_path
     except OSError:
@@ -51,10 +56,13 @@ def write_lrc(
     segments: SubtitleSource,
     output_path: str,
     translated: bool = False,
+    max_line_length: int = OutputDefaults.MAX_LINE_LENGTH,
+    max_lines: int = OutputDefaults.MAX_LINES,
 ) -> str:
     """Write an LRC lyrics-style subtitle file from segments. Returns output_path.
 
-    LRC has no end-time field, so it carries only each segment's start time.
+    LRC has no end-time field, so it carries only each segment's start time, and each cue is
+    written as one line since LRC readers show one line per timestamp.
     """
     try:
         lines = _build_lrc_lines(segments, translated)
@@ -70,13 +78,15 @@ def write_ass(
     segments: SubtitleSource,
     output_path: str,
     translated: bool = False,
+    max_line_length: int = OutputDefaults.MAX_LINE_LENGTH,
+    max_lines: int = OutputDefaults.MAX_LINES,
 ) -> str:
     """Write an ASS (Advanced SubStation Alpha) subtitle file from segments. Returns output_path.
 
     Uses one default style; wrapped lines are joined with the ASS forced line-break `\\N`.
     """
     try:
-        lines = _ASS_HEADER + _build_ass_events(segments, translated)
+        lines = _ASS_HEADER + _build_ass_events(segments, translated, (max_line_length, max_lines))
         _write_file(output_path, lines)
         return output_path
     except OSError:
@@ -89,13 +99,15 @@ def write_sbv(
     segments: SubtitleSource,
     output_path: str,
     translated: bool = False,
+    max_line_length: int = OutputDefaults.MAX_LINE_LENGTH,
+    max_lines: int = OutputDefaults.MAX_LINES,
 ) -> str:
     """Write a YouTube SBV subtitle file from segments. Returns output_path.
 
     Uses the 'translated' field when translated=True, otherwise uses 'text'.
     """
     try:
-        lines = _build_sbv_cues(segments, translated)
+        lines = _build_sbv_cues(segments, translated, (max_line_length, max_lines))
         _write_file(output_path, lines)
         return output_path
     except OSError:
@@ -113,23 +125,26 @@ def derive_output_path(input_path: str, suffix: str, ext: str) -> str:
     return f"{base}{suffix}{ext}"
 
 
-def _build_srt(segments: SubtitleSource, translated: bool) -> list[str]:
-    """Return SRT-formatted text lines for all segments."""
+LineLimits = tuple[int, int]
+
+
+def _build_srt(segments: SubtitleSource, translated: bool, limits: LineLimits) -> list[str]:
+    """Return SRT-formatted text lines, numbering cues 1..n with no gaps."""
     lines: list[str] = []
-    for seg in segments:  # type: ignore[union-attr]
-        lines.append(str(seg["id"] + 1))
+    for number, (seg, text_lines) in enumerate(_cues_with_text(segments, translated, limits), 1):
+        lines.append(str(number))
         lines.append(f"{_srt_time(seg['start'])} --> {_srt_time(seg['end'])}")
-        lines.extend(_wrap_text(_get_text(seg, translated)))
+        lines.extend(text_lines)
         lines.append("")
     return lines
 
 
-def _build_vtt_cues(segments: SubtitleSource, translated: bool) -> list[str]:
-    """Return VTT cue lines for all segments."""
+def _build_vtt_cues(segments: SubtitleSource, translated: bool, limits: LineLimits) -> list[str]:
+    """Return VTT cue lines, escaping the characters WebVTT reserves for markup."""
     lines: list[str] = []
-    for seg in segments:  # type: ignore[union-attr]
+    for seg, text_lines in _cues_with_text(segments, translated, limits):
         lines.append(f"{_vtt_time(seg['start'])} --> {_vtt_time(seg['end'])}")
-        lines.extend(_wrap_text(_get_text(seg, translated)))
+        lines.extend(_vtt_escape(line) for line in text_lines)
         lines.append("")
     return lines
 
@@ -145,12 +160,12 @@ def _build_lrc_lines(segments: SubtitleSource, translated: bool) -> list[str]:
     return lines
 
 
-def _build_sbv_cues(segments: SubtitleSource, translated: bool) -> list[str]:
+def _build_sbv_cues(segments: SubtitleSource, translated: bool, limits: LineLimits) -> list[str]:
     """Return SBV cue lines for all segments."""
     lines: list[str] = []
-    for seg in segments:  # type: ignore[union-attr]
+    for seg, text_lines in _cues_with_text(segments, translated, limits):
         lines.append(f"{_sbv_time(seg['start'])},{_sbv_time(seg['end'])}")
-        lines.extend(_wrap_text(_get_text(seg, translated)))
+        lines.extend(text_lines)
         lines.append("")
     return lines
 
@@ -174,11 +189,11 @@ _ASS_HEADER = [
 ]
 
 
-def _build_ass_events(segments: SubtitleSource, translated: bool) -> list[str]:
+def _build_ass_events(segments: SubtitleSource, translated: bool, limits: LineLimits) -> list[str]:
     """Return one ASS 'Dialogue:' line per segment, with wrapped lines joined by \\N."""
     lines: list[str] = []
-    for seg in segments:  # type: ignore[union-attr]
-        text = "\\N".join(_wrap_text(_get_text(seg, translated)))
+    for seg, text_lines in _cues_with_text(segments, translated, limits):
+        text = "\\N".join(text_lines)
         start, end = _ass_time(seg["start"]), _ass_time(seg["end"])
         lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
     return lines
@@ -193,27 +208,88 @@ def _get_text(seg: Union[Segment, TranslatedSegment, TransliteratedSegment], tra
     return seg.get("text", "").strip()  # type: ignore[union-attr]
 
 
-def _wrap_text(text: str) -> list[str]:
-    """Break text into lines within MAX_LINE_LENGTH, capped at MAX_LINES."""
-    max_len = OutputDefaults.MAX_LINE_LENGTH
-    max_lines = OutputDefaults.MAX_LINES
-    words = text.split()
+def _cues_with_text(
+    segments: SubtitleSource,
+    translated: bool,
+    limits: LineLimits,
+) -> Iterator[tuple[AnySegment, list[str]]]:
+    """Yield each segment with its wrapped text lines, skipping segments with no text."""
+    for seg in segments:  # type: ignore[union-attr]
+        text_lines = wrap_text(_get_text(seg, translated), *limits)
+        if text_lines:
+            yield seg, text_lines
+
+
+def wrap_text(text: str, max_len: int = OutputDefaults.MAX_LINE_LENGTH, max_lines: int = OutputDefaults.MAX_LINES) -> list[str]:
+    """Break text into display lines of at most max_len characters, never dropping words.
+
+    Text that fits on max_lines lines is split into lines of similar length (a short top line
+    over a long bottom line reads awkwardly), preferring a break right after punctuation. Text
+    too long for max_lines keeps every word on extra lines rather than losing dialogue.
+    """
+    text = " ".join(text.split())
+    if not text:
+        return []
+    if len(text) <= max_len:
+        return [text]
+    words = text.split(" ")
+    if len(words) == 1:
+        return _chunk(text, max_len)
+    if max_lines >= 2 and len(text) <= max_len * 2 + 1:
+        balanced = _balanced_split(words, max_len)
+        if balanced:
+            return balanced
+    return _greedy_wrap(words, max_len)
+
+
+def _balanced_split(words: list[str], max_len: int) -> list[str]:
+    """Split words into two lines that both fit, choosing the most even, best-punctuated break."""
+    best: Optional[tuple[float, list[str]]] = None
+    for idx in range(1, len(words)):
+        top, bottom = " ".join(words[:idx]), " ".join(words[idx:])
+        if len(top) > max_len or len(bottom) > max_len:
+            continue
+        score = float(abs(len(top) - len(bottom)))
+        if words[idx - 1].endswith((".", ",", "?", "!", ";", ":")):
+            score -= max_len * 0.25
+        if len(top) > len(bottom):
+            score += 2  # prefer the bottom line to be the longer one
+        if best is None or score < best[0]:
+            best = (score, [top, bottom])
+    return best[1] if best else []
+
+
+def _greedy_wrap(words: list[str], max_len: int) -> list[str]:
+    """Fill lines word by word; a single word longer than max_len is split into chunks."""
     lines: list[str] = []
     current = ""
     for word in words:
-        candidate = f"{current} {word}".strip() if current else word
+        candidate = f"{current} {word}" if current else word
         if len(candidate) <= max_len:
             current = candidate
+            continue
+        if current:
+            lines.append(current)
+        if len(word) > max_len:
+            *full, current = _chunk(word, max_len)
+            lines.extend(full)
         else:
-            if current:
-                lines.append(current)
             current = word
-        if len(lines) >= max_lines:
-            current = ""
-            break
-    if current and len(lines) < max_lines:
+    if current:
         lines.append(current)
-    return lines if lines else [text]
+    return lines
+
+
+def _chunk(text: str, max_len: int) -> list[str]:
+    """Split unbroken text (e.g. Chinese or Japanese) into evenly sized lines."""
+    count = math.ceil(len(text) / max_len)
+    size = math.ceil(len(text) / count)
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+
+def _vtt_escape(line: str) -> str:
+    """Escape the characters WebVTT cue text treats as markup."""
+    return line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _srt_time(seconds: float) -> str:

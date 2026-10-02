@@ -1,11 +1,11 @@
-# test_whisper_engine.py — unit tests for ccgen.engines.captions.whisper_engine
+# test_whisper_engine.py - unit tests for ccgen.engines.captions.whisper_engine
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ccgen.engines.captions.whisper_engine import WhisperEngine
+from ccgen.engines.captions.whisper_engine import WhisperEngine, resolve_compute
 
 
 def _fake_word(word: str, start: float, end: float) -> SimpleNamespace:
@@ -41,10 +41,51 @@ class TestLoad:
     @patch("ccgen.engines.captions.whisper_engine.download_progress")
     @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
     def test_progress_cb_messages(self, mock_model_cls, mock_download_progress):
-        engine = WhisperEngine(model_name="tiny")
+        engine = WhisperEngine(model_name="tiny", device="cpu")
         messages = []
         engine.load(progress_cb=messages.append)
-        assert messages == ["Loading model 'tiny'...", "Model ready."]
+        assert messages == ["Loading model 'tiny'...", "Model ready (CPU)."]
+
+    @patch("ccgen.engines.captions.whisper_engine.download_progress")
+    @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
+    def test_second_engine_reuses_cached_model(self, mock_model_cls, mock_download_progress):
+        WhisperEngine(model_name="tiny", device="cpu", compute_type="int8").load()
+        WhisperEngine(model_name="tiny", device="cpu", compute_type="int8").load()
+        mock_model_cls.assert_called_once()
+
+    @patch("ccgen.engines.captions.whisper_engine.download_progress")
+    @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
+    def test_switching_model_evicts_previous(self, mock_model_cls, mock_download_progress):
+        WhisperEngine(model_name="tiny", device="cpu", compute_type="int8").load()
+        WhisperEngine(model_name="base", device="cpu", compute_type="int8").load()
+        WhisperEngine(model_name="tiny", device="cpu", compute_type="int8").load()
+        assert mock_model_cls.call_count == 3
+
+    @patch("ccgen.engines.captions.whisper_engine._cuda_device_count", return_value=1)
+    @patch("ccgen.engines.captions.whisper_engine.download_progress")
+    @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
+    def test_auto_device_falls_back_to_cpu_when_gpu_fails(self, mock_model_cls, mock_download_progress, _):
+        gpu_model = MagicMock()
+        gpu_model.detect_language.side_effect = RuntimeError("cublas64_12.dll is not found")
+        cpu_model = MagicMock()
+        mock_model_cls.side_effect = [gpu_model, cpu_model]
+        messages = []
+
+        engine = WhisperEngine(model_name="tiny", device="auto", compute_type="auto")
+        engine.load(progress_cb=messages.append)
+
+        assert mock_model_cls.call_args_list[0].kwargs == {"device": "cuda", "compute_type": "float16"}
+        assert mock_model_cls.call_args_list[1].kwargs == {"device": "cpu", "compute_type": "int8"}
+        assert messages[-1] == "Model ready (CPU)."
+
+    @patch("ccgen.engines.captions.whisper_engine._cuda_device_count", return_value=1)
+    @patch("ccgen.engines.captions.whisper_engine.download_progress")
+    @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
+    def test_explicit_cuda_failure_is_not_hidden(self, mock_model_cls, mock_download_progress, _):
+        mock_model_cls.return_value.detect_language.side_effect = RuntimeError("no cuDNN")
+        engine = WhisperEngine(model_name="tiny", device="cuda", compute_type="float16")
+        with pytest.raises(RuntimeError, match="no cuDNN"):
+            engine.load()
 
     @patch("ccgen.engines.captions.whisper_engine.download_progress")
     @patch("ccgen.engines.captions.whisper_engine.WhisperModel", side_effect=RuntimeError("boom"))
@@ -52,6 +93,32 @@ class TestLoad:
         engine = WhisperEngine(model_name="tiny")
         with pytest.raises(RuntimeError, match="Model load failed"):
             engine.load()
+
+
+class TestResolveCompute:
+    @patch("ccgen.engines.captions.whisper_engine._cuda_device_count", return_value=0)
+    def test_auto_without_gpu_uses_cpu_int8(self, _):
+        assert resolve_compute("auto", "auto") == ("cpu", "int8")
+
+    @patch("ccgen.engines.captions.whisper_engine._cuda_device_count", return_value=2)
+    def test_auto_with_gpu_uses_cuda_float16(self, _):
+        assert resolve_compute("auto", "auto") == ("cuda", "float16")
+
+    def test_explicit_values_pass_through(self):
+        assert resolve_compute("cpu", "float32") == ("cpu", "float32")
+
+
+class TestTranscribeQualitySettings:
+    @patch("ccgen.engines.captions.whisper_engine.download_progress")
+    @patch("ccgen.engines.captions.whisper_engine.WhisperModel")
+    def test_long_form_safeguards_passed_to_faster_whisper(self, mock_model_cls, mock_download_progress, tmp_wav):
+        engine = _loaded_engine(mock_model_cls, [], _fake_info())
+        engine.transcribe(tmp_wav)
+        kwargs = mock_model_cls.return_value.transcribe.call_args.kwargs
+        assert kwargs["condition_on_previous_text"] is False
+        assert kwargs["hallucination_silence_threshold"] == 2.0
+        assert kwargs["word_timestamps"] is True
+        assert kwargs["language_detection_segments"] == 3
 
 
 class TestTranscribeBeforeLoad:

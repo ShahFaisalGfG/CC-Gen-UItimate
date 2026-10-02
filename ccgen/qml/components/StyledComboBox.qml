@@ -1,61 +1,123 @@
-// qmllint disable unqualified import
 pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
+import QtQuick.Layouts
 
+// Combo box for {label, code} option lists. `readiness` maps a code to true (downloaded) or
+// false (downloads on first use) and adds a badge to that row and to the tooltip.
 ComboBox {
     id: control
 
-    font.pixelSize: 12
+    property var readiness: ({})
+    property string accessibleName: ""
+    property string toolTipText: ""
 
-    // Optional map of {itemText: bool} - when an entry exists for a row, a small
-    // ready/needs-download glyph is appended to that row's label in the popup list.
-    property var downloadStatus: ({})
-
-    function labelFor(data) {
-        var value = data ?? ""
-        var known = control.downloadStatus[value]
-        if (known === undefined) return value
-        return value + (known ? "  ✓" : "  ⬇")
+    function selectCode(code) {
+        var idx = control.indexOfValue(code)
+        if (idx >= 0) control.currentIndex = idx
     }
 
-    // The popup defaults to at least the control's own (often fillWidth-stretched) width,
-    // leaving a wide empty gutter when every entry is much shorter than the closed control -
-    // measuring the longest label makes the popup hug its content instead.
-    FontMetrics {
-        id: _fm
+    function _badge(code) {
+        var ready = control.readiness[code]
+        if (ready === undefined) return ""
+        return ready ? "Downloaded" : "Downloads on first use"
+    }
+
+    textRole: "label"
+    valueRole: "code"
+    implicitHeight: Theme.controlHeight
+    font.family: Theme.fontFamily
+    font.pixelSize: Theme.fontBody
+    hoverEnabled: true
+
+    Accessible.name: control.accessibleName
+    Accessible.description: control.toolTipText
+
+    ToolTip.visible: control.toolTipText.length > 0 && !control.popup.visible && (control.hovered || control.visualFocus)
+    ToolTip.text: control._badge(control.currentValue)
+        ? control.toolTipText + "\n" + control.currentText + ": " + control._badge(control.currentValue).toLowerCase() + "."
+        : control.toolTipText
+    ToolTip.delay: 600
+
+    contentItem: Text {
+        leftPadding: 10
+        rightPadding: control.indicator.width + 6
+        text: control.displayText
         font: control.font
+        color: control.enabled ? Theme.text : Theme.textMuted
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
+        Accessible.ignored: true
     }
 
-    function _maxLabelWidth() {
-        var max = 0
-        for (var i = 0; i < control.count; i++) {
-            var w = _fm.boundingRect(control.labelFor(control.textAt(i))).width
-            if (w > max) max = w
-        }
-        return max
+    indicator: Icon {
+        x: control.width - width - 10
+        y: (control.height - height) / 2
+        name: "chevronDown"
+        size: 10
+        color: Theme.textMuted
+    }
+
+    background: Rectangle {
+        radius: Theme.radius
+        color: control.hovered && control.enabled ? Theme.surfaceHover : Theme.surface
+        border.width: control.visualFocus ? 2 : 1
+        border.color: control.visualFocus ? Theme.focusRing : Theme.border
     }
 
     delegate: ItemDelegate {
+        id: row
         required property var modelData
         required property int index
 
-        width:       control.popup.width
-        height:      32
-        text:        control.labelFor(modelData)
-        font.pixelSize: 12
-        highlighted: control.highlightedIndex === index
+        readonly property string badge: control._badge(row.modelData[control.valueRole])
+
+        width: control.popup.width
+        height: 34
+        highlighted: control.highlightedIndex === row.index
+        Accessible.name: row.modelData[control.textRole] + (row.badge ? ", " + row.badge : "")
+
+        contentItem: RowLayout {
+            spacing: Theme.spaceSm
+            Text {
+                Layout.fillWidth: true
+                text: row.modelData[control.textRole]
+                font: control.font
+                color: Theme.text
+                elide: Text.ElideRight
+            }
+            Icon {
+                visible: row.badge.length > 0
+                name: control.readiness[row.modelData[control.valueRole]] ? "completed" : "download"
+                size: 12
+                color: control.readiness[row.modelData[control.valueRole]] ? Theme.success : Theme.textMuted
+            }
+        }
+        background: Rectangle {
+            color: row.highlighted ? Theme.accentSoft : "transparent"
+        }
     }
 
-    popup.contentItem: ListView {
-        clip:          true
-        implicitHeight: Math.min(contentHeight, 260)
-        model:         control.delegateModel
-        currentIndex:  control.highlightedIndex
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-    }
+    popup: Popup {
+        y: control.height + 2
+        width: Math.max(control.width, 220)
+        implicitHeight: Math.min(contentItem.implicitHeight + 8, 320)
+        padding: 4
 
-    popup.width: Math.max(control._maxLabelWidth() + 48, 80)
+        contentItem: ListView {
+            clip: true
+            implicitHeight: contentHeight
+            model: control.popup.visible ? control.delegateModel : null
+            currentIndex: control.highlightedIndex
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        }
+
+        background: Rectangle {
+            radius: Theme.radius
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.borderStrong
+        }
+    }
 }

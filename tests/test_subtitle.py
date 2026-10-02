@@ -1,10 +1,12 @@
-# test_subtitle.py — unit tests for ccgen.core.subtitle
+# test_subtitle.py - unit tests for ccgen.core.subtitle
 
 import os
 
 import pytest
 
-from ccgen.core.subtitle import derive_output_path, write_ass, write_lrc, write_sbv, write_srt, write_vtt
+from ccgen.core import Segment
+
+from ccgen.core.subtitle import derive_output_path, wrap_text, write_ass, write_lrc, write_sbv, write_srt, write_vtt
 
 
 class TestWriteSrt:
@@ -143,3 +145,53 @@ class TestDeriveOutputPath:
     def test_adds_suffix(self):
         result = derive_output_path("/videos/movie.mp4", "_ar", ".srt")
         assert result == "/videos/movie_ar.srt"
+
+
+class TestWrapText:
+    def test_short_text_stays_on_one_line(self):
+        assert wrap_text("Hello there", 42, 2) == ["Hello there"]
+
+    def test_two_lines_are_balanced(self):
+        lines = wrap_text("one two three four five six seven eight nine ten eleven", 42, 2)
+        assert len(lines) == 2
+        assert abs(len(lines[0]) - len(lines[1])) <= 10
+
+    def test_overflow_keeps_every_word(self):
+        text = " ".join(f"word{i}" for i in range(40))
+        lines = wrap_text(text, 42, 2)
+        assert " ".join(lines) == text
+        assert all(len(line) <= 42 for line in lines)
+
+    def test_unbroken_text_is_chunked(self):
+        lines = wrap_text("x" * 50, 20, 2)
+        assert "".join(lines) == "x" * 50
+        assert all(len(line) <= 20 for line in lines)
+
+    def test_blank_text_has_no_lines(self):
+        assert wrap_text("   ", 42, 2) == []
+
+
+class TestCueNumberingAndEscaping:
+    def test_srt_numbers_are_sequential_after_skipping_empty_cues(self, tmp_path):
+        segments: list[Segment] = [
+            {"id": 3, "start": 0.0, "end": 1.0, "text": "first", "words": [], "language": "en"},
+            {"id": 7, "start": 1.0, "end": 2.0, "text": "  ", "words": [], "language": "en"},
+            {"id": 9, "start": 2.0, "end": 3.0, "text": "second", "words": [], "language": "en"},
+        ]
+        out = str(tmp_path / "out.srt")
+        write_srt(segments, out)
+        blocks = open(out, encoding="utf-8").read().strip().split("\n\n")
+        assert [block.splitlines()[0] for block in blocks] == ["1", "2"]
+
+    def test_vtt_escapes_markup_characters(self, tmp_path):
+        segments: list[Segment] = [{"id": 0, "start": 0.0, "end": 1.0, "text": "a < b & c", "words": [], "language": "en"}]
+        out = str(tmp_path / "out.vtt")
+        write_vtt(segments, out)
+        assert "a &lt; b &amp; c" in open(out, encoding="utf-8").read()
+
+    def test_long_cue_text_is_never_truncated(self, tmp_path):
+        text = " ".join(f"word{i}" for i in range(40))
+        segments: list[Segment] = [{"id": 0, "start": 0.0, "end": 5.0, "text": text, "words": [], "language": "en"}]
+        out = str(tmp_path / "out.srt")
+        write_srt(segments, out)
+        assert "word39" in open(out, encoding="utf-8").read()

@@ -1,4 +1,4 @@
-# defaults.py — application defaults and supported options for CC-Gen-Ultimate
+# defaults.py - application defaults and supported options for CC-Gen-Ultimate
 
 from typing import Any
 
@@ -16,23 +16,66 @@ class ModelDefaults:
     """Whisper model selection defaults."""
 
     DEFAULT_MODEL = "base"
-    SUPPORTED_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
+    SUPPORTED_MODELS = ["tiny", "base", "small", "medium", "large-v3-turbo", "large-v3"]
     MODEL_SIZES_MB: dict[str, int] = {
         "tiny": 75,
         "base": 145,
         "small": 466,
         "medium": 1500,
+        "large-v3-turbo": 1620,
         "large-v3": 3000,
+    }
+    MODEL_NOTES: dict[str, str] = {
+        "tiny": "fastest, rough drafts",
+        "base": "fast, good for clear speech",
+        "small": "balanced speed and accuracy",
+        "medium": "accurate, slow on CPU",
+        "large-v3-turbo": "near-best accuracy, much faster than large",
+        "large-v3": "best accuracy, slowest",
     }
 
 
-class ComputeDefaults:
-    """CTranslate2 compute type defaults."""
+class ModelRepos:
+    """Hugging Face repo ids for every downloadable model.
 
-    DEFAULT_DEVICE = "cpu"
-    DEFAULT_COMPUTE_TYPE = "int8"
-    SUPPORTED_DEVICES = ["cpu", "cuda"]
-    SUPPORTED_COMPUTE_TYPES = ["int8", "float16", "float32"]
+    Shared by the engines that load them, the cache-status checks, and the Manage Models catalog,
+    so adding a model means editing this one place.
+    """
+
+    WHISPER: dict[str, str] = {
+        "tiny": "Systran/faster-whisper-tiny",
+        "base": "Systran/faster-whisper-base",
+        "small": "Systran/faster-whisper-small",
+        "medium": "Systran/faster-whisper-medium",
+        "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+        "large-v3": "Systran/faster-whisper-large-v3",
+    }
+    M2M100_TOKENIZER = "Mavkif/m2m100_rup_tokenizer_both"
+    M2M100: dict[tuple[str, str], str] = {
+        ("ur", "roman"): "Mavkif/m2m100_rup_ur_to_rur",
+        ("roman", "ur"): "Mavkif/m2m100_rup_rur_to_ur",
+    }
+    REKHTA = "rekhtalabs/hi-2-ur-translit"
+
+
+class ComputeDefaults:
+    """CTranslate2 device and compute type defaults.
+
+    "auto" picks an NVIDIA GPU when CUDA is usable and falls back to the CPU otherwise; the
+    "auto" compute type resolves to float16 on a GPU and int8 on a CPU.
+    """
+
+    DEVICE_AUTO = "auto"
+    COMPUTE_AUTO = "auto"
+    DEFAULT_DEVICE = DEVICE_AUTO
+    DEFAULT_COMPUTE_TYPE = COMPUTE_AUTO
+    SUPPORTED_DEVICES = [DEVICE_AUTO, "cpu", "cuda"]
+    SUPPORTED_COMPUTE_TYPES = [COMPUTE_AUTO, "int8", "float16", "float32"]
+    DEVICES: list[tuple[str, str]] = [
+        ("Automatic (GPU when available)", DEVICE_AUTO),
+        ("CPU", "cpu"),
+        ("NVIDIA GPU (CUDA)", "cuda"),
+    ]
 
 
 class TranscriptionDefaults:
@@ -43,6 +86,14 @@ class TranscriptionDefaults:
     BEAM_SIZE = 5
     VAD_FILTER = True
     VAD_MIN_SILENCE_MS = 500
+    # Conditioning each window on the previous one lets a single misheard phrase repeat for
+    # minutes on long files; turning it off trades a little stylistic consistency for robustness.
+    CONDITION_ON_PREVIOUS_TEXT = False
+    # Skips silent stretches longer than this when a window looks hallucinated (needs word timestamps).
+    HALLUCINATION_SILENCE_S = 2.0
+    # Language detection votes over this many 30 s windows, so a music or silent intro can't
+    # decide the language for the whole file on its own.
+    LANGUAGE_DETECTION_SEGMENTS = 3
 
 
 class TranslationDefaults:
@@ -54,16 +105,27 @@ class TranslationDefaults:
 
 
 class OutputDefaults:
-    """Subtitle output format defaults."""
+    """Subtitle output format and cue layout defaults."""
 
     FORMAT_SRT = True
     FORMAT_VTT = False
     FORMAT_LRC = False
     FORMAT_ASS = False
     FORMAT_SBV = False
+    # Empty means "next to each input file".
+    DIRECTORY = ""
     MAX_LINE_LENGTH = 42
+    MAX_LINE_LENGTH_RANGE = (20, 80)
     MAX_LINES = 2
+    MAX_LINES_RANGE = (1, 3)
     MIN_DURATION_MS = 500
+    # A cue is closed early once it runs this long, even when it still has room for more text.
+    MAX_CUE_DURATION_S = 7.0
+    # A pause between two words at least this long starts a new cue.
+    CUE_PAUSE_SPLIT_S = 0.8
+    # Scripts written without spaces between words get a shorter line limit (Netflix guidance).
+    NO_SPACE_LANGUAGES = frozenset({"zh", "ja", "th", "my", "lo", "km"})
+    NO_SPACE_MAX_LINE_LENGTH = 16
 
 
 class AudioDefaults:
@@ -75,21 +137,14 @@ class AudioDefaults:
 
 
 class LoggingDefaults:
-    """Logging preferences."""
+    """Logging preferences: "critical" keeps errors only, "all" records everything."""
 
     ENABLE_LOGS = True
     DEFAULT_LOG_LEVEL = "critical"
     SUPPORTED_LOG_LEVELS = ["critical", "all"]
-
-
-class UIDefaults:
-    """Main window and panel size defaults."""
-
-    WINDOW_WIDTH = 820
-    WINDOW_HEIGHT = 560
-    MIN_WIDTH = 680
-    MIN_HEIGHT = 460
-    LEFT_PANEL_WIDTH = 240
+    LOG_FILE_NAME = "ccgen.log"
+    MAX_LOG_BYTES = 1_000_000
+    LOG_BACKUP_COUNT = 3
 
 
 class LanguageOptions:
@@ -181,6 +236,7 @@ def get_default_settings() -> dict[str, Any]:
             "target_lang": TranslationDefaults.DEFAULT_TARGET_LANG,
         },
         "output": {
+            "directory": OutputDefaults.DIRECTORY,
             "srt": OutputDefaults.FORMAT_SRT,
             "vtt": OutputDefaults.FORMAT_VTT,
             "lrc": OutputDefaults.FORMAT_LRC,

@@ -1,4 +1,4 @@
-# test_argos_engine.py — unit tests for ccgen.engines.translation.argos_engine
+# test_argos_engine.py - unit tests for ccgen.engines.translation.argos_engine
 
 from unittest.mock import MagicMock, patch
 
@@ -182,3 +182,38 @@ class TestListInstalled:
         mock_package.get_installed_packages.return_value = [_FakePackage("en", "es"), _FakePackage("en", "fr")]
         engine = ArgosEngine()
         assert engine.list_installed() == ["en→es", "en→fr"]
+
+
+class TestPivotThroughEnglish:
+    @patch("ccgen.engines.translation.argos_engine.download_progress")
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.translate")
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.package")
+    def test_installs_both_legs_when_no_direct_pair(self, mock_package, mock_translate, mock_download_progress):
+        mock_package.get_installed_packages.return_value = []
+        ur_en, en_fr = _FakePackage("ur", "en", "ur_en"), _FakePackage("en", "fr", "en_fr")
+        mock_package.get_available_packages.return_value = [ur_en, en_fr]
+        mock_translate.get_translation_from_codes.return_value = MagicMock()
+
+        ArgosEngine("ur", "fr").ensure_model()
+
+        installed = [c.args[0] for c in mock_package.install_from_path.call_args_list]
+        assert installed == ["ur_en", "en_fr"]
+
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.translate")
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.package")
+    def test_installed_legs_count_as_ready(self, mock_package, mock_translate):
+        mock_package.get_installed_packages.return_value = [_FakePackage("ur", "en"), _FakePackage("en", "fr")]
+        mock_translate.get_translation_from_codes.return_value = MagicMock()
+
+        ArgosEngine("ur", "fr").ensure_model()
+
+        mock_package.update_package_index.assert_not_called()
+
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.translate")
+    @patch("ccgen.engines.translation.argos_engine.argostranslate.package")
+    def test_missing_leg_reports_requested_pair(self, mock_package, mock_translate):
+        mock_package.get_installed_packages.return_value = []
+        mock_package.get_available_packages.return_value = [_FakePackage("ur", "en")]
+
+        with pytest.raises(RuntimeError, match="No translation package for ur→fr"):
+            ArgosEngine("ur", "fr").ensure_model()

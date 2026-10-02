@@ -1,49 +1,43 @@
-# app_ctrl.py — main window controller (theme, logs, app info)
+# app_ctrl.py - main window controller (theme, app info, desktop shell actions, logs)
 
+import logging
+import os
 import subprocess
-import sys
 import winreg
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 
 from ccgen.config.defaults import AppInfo
+from ccgen.utils.helpers import to_local_path
+from ccgen.utils.logging import clear_logs, get_logs_dir
 from ccgen.utils.settings import load_settings, save_settings
+
+_log = logging.getLogger(__name__)
 
 
 def _detect_system_theme() -> str:
-    """Read Windows registry to determine the current light or dark mode."""
+    """Read the Windows registry to determine the current light or dark app mode."""
     try:
-        key = winreg.OpenKey(
+        with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-        )
-        value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-        winreg.CloseKey(key)
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
         return "light" if value == 1 else "dark"
-    except Exception:
+    except OSError:
         return "light"
 
 
 class AppController(QObject):
-    """Exposes main-window state (theme, logs, app metadata) to QML."""
+    """Exposes theme, app metadata, and desktop shell actions to QML."""
 
     themeChanged = Signal(str)
-    logAppended  = Signal(str)
-    logsCleared  = Signal()
-
-    _COLOR_TOKENS: dict[str, dict[str, str]] = {
-        "colorBackground":    {"dark": "#1e1e1e", "light": "#f0f0f0"},
-        "colorPanel":         {"dark": "#242424", "light": "#f8f8f8"},
-        "colorDivider":       {"dark": "#333333", "light": "#e0e0e0"},
-        "colorTextSecondary": {"dark": "#888888", "light": "#777777"},
-    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._logs: list[str] = []
-        settings = load_settings()
-        raw = settings.get("ui", {}).get("theme", "system")
-        self._theme = _detect_system_theme() if raw == "system" else raw
+        self._preference = str(load_settings().get("ui", {}).get("theme", "system"))
+        self._theme = self._resolve(self._preference)
 
     # ── Properties ───────────────────────────────────────────────────────────
 
@@ -51,36 +45,6 @@ class AppController(QObject):
     def currentTheme(self) -> str:
         """Resolved theme name: 'light' or 'dark'."""
         return self._theme
-
-    @Property(str, notify=themeChanged)
-    def colorBackground(self) -> str:
-        """Main window background color for the current theme."""
-        return self._COLOR_TOKENS["colorBackground"][self._theme]
-
-    @Property(str, notify=themeChanged)
-    def colorPanel(self) -> str:
-        """Secondary panel background color for the current theme."""
-        return self._COLOR_TOKENS["colorPanel"][self._theme]
-
-    @Property(str, notify=themeChanged)
-    def colorDivider(self) -> str:
-        """Divider line and border color for the current theme."""
-        return self._COLOR_TOKENS["colorDivider"][self._theme]
-
-    @Property(str, notify=themeChanged)
-    def colorTextSecondary(self) -> str:
-        """Muted secondary text color for the current theme."""
-        return self._COLOR_TOKENS["colorTextSecondary"][self._theme]
-
-    @Property(str, constant=True)
-    def colorDanger(self) -> str:
-        """Destructive-action color, theme-independent."""
-        return "#e81123"
-
-    @Property(str, constant=True)
-    def colorSuccess(self) -> str:
-        """Success/positive status color, theme-independent."""
-        return "#2e7d32"
 
     @Property(str, constant=True)
     def appName(self) -> str:
@@ -102,68 +66,65 @@ class AppController(QObject):
         """Application author."""
         return AppInfo.APP_AUTHOR
 
-    # ── Slots ────────────────────────────────────────────────────────────────
+    # ── Theme ────────────────────────────────────────────────────────────────
 
     @Slot()
     def detectTheme(self) -> None:
-        """Re-detect system theme and emit themeChanged if it changed."""
-        try:
-            settings = load_settings()
-            raw = settings.get("ui", {}).get("theme", "system")
-            new_theme = _detect_system_theme() if raw == "system" else raw
-            if new_theme != self._theme:
-                self._theme = new_theme
-                self.themeChanged.emit(self._theme)
-        except Exception:
-            pass
+        """Follow a Windows light/dark switch while the theme preference is 'system'."""
+        self._set_theme(self._resolve(self._preference))
 
     @Slot(str)
     def applyTheme(self, theme: str) -> None:
         """Apply and persist a theme choice ('system', 'light', 'dark')."""
-        try:
-            resolved = _detect_system_theme() if theme == "system" else theme
-            if resolved != self._theme:
-                self._theme = resolved
-                self.themeChanged.emit(self._theme)
-            settings = load_settings()
-            settings.setdefault("ui", {})["theme"] = theme
-            save_settings(settings)
-        except Exception:
-            pass
+        self._preference = theme
+        self._set_theme(self._resolve(theme))
+        settings = load_settings()
+        settings.setdefault("ui", {})["theme"] = theme
+        save_settings(settings)
+
+    # ── Desktop shell actions ────────────────────────────────────────────────
 
     @Slot(str)
-    def appendLog(self, message: str) -> None:
-        """Add a message to the in-memory log and notify QML."""
+    def openFolder(self, path: str) -> None:
+        """Open a folder in File Explorer."""
+        if path and os.path.isdir(path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    @Slot(str)
+    def revealFile(self, path: str) -> None:
+        """Open File Explorer with the given file selected."""
+        if not path or not os.path.exists(path):
+            return
         try:
-            self._logs.append(message)
-            self.logAppended.emit(message)
-        except Exception:
-            pass
+            subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+        except OSError:
+            _log.warning("Could not reveal %s in Explorer", path, exc_info=True)
+            self.openFolder(os.path.dirname(path))
+
+    @Slot(str, result=str)
+    def localPath(self, url: str) -> str:
+        """Convert a file:// URL from a QML dialog into a local Windows path."""
+        return to_local_path(url)
 
     @Slot()
-    def clearLogs(self) -> None:
-        """Clear all in-memory log entries and notify QML."""
-        try:
-            self._logs.clear()
-            self.logsCleared.emit()
-        except Exception:
-            pass
+    def openLogsFolder(self) -> None:
+        """Open the folder holding the application log files."""
+        self.openFolder(get_logs_dir())
 
-    @Slot(result=str)
-    def logsText(self) -> str:
-        """Return all log entries joined by newlines."""
-        try:
-            return "\n".join(self._logs)
-        except Exception:
-            return ""
+    @Slot(result=bool)
+    def clearLogs(self) -> bool:
+        """Empty the application log files. Returns True on success."""
+        return clear_logs()
 
-    @Slot()
-    def openOutputFolder(self, path: str) -> None:
-        """Open the folder containing a file in Windows Explorer."""
-        try:
-            import os
-            folder = os.path.dirname(path)
-            if sys.platform == "win32":
-                subprocess.run(["explorer", folder], check=False)
-        except Exception:
-            pass
+    # ── Internal helpers ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve(preference: str) -> str:
+        """Map a theme preference to the concrete 'light' or 'dark' theme."""
+        return _detect_system_theme() if preference not in ("light", "dark") else preference
+
+    def _set_theme(self, theme: str) -> None:
+        """Store the resolved theme and notify QML when it changed."""
+        if theme != self._theme:
+            self._theme = theme
+            self.themeChanged.emit(theme)

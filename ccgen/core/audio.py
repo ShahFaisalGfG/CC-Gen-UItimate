@@ -1,4 +1,4 @@
-# audio.py — audio extraction from video/audio files via ffmpeg-python
+# audio.py - audio extraction from video/audio files via ffmpeg-python
 
 import os
 import shutil

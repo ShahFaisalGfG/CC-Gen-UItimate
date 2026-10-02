@@ -1,4 +1,4 @@
-# download_progress.py — routes third-party model-download byte progress (Hugging Face Hub,
+# download_progress.py - routes third-party model-download byte progress (Hugging Face Hub,
 # faster-whisper, argostranslate) to a single per-thread callback so the UI can show a real
 # download percentage instead of a generic "downloading..." spinner.
 
@@ -14,6 +14,8 @@ import argostranslate.networking as argos_networking
 import faster_whisper.utils as fw_utils
 from huggingface_hub import constants as hf_constants
 from tqdm.auto import tqdm as base_tqdm
+
+from ccgen.utils.callbacks import JobCancelled
 
 _log = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ _T = TypeVar("_T")
 _state = threading.local()
 
 
-class DownloadCancelled(Exception):
+class DownloadCancelled(JobCancelled):
     """Raised from a progress callback to unwind a download the user cancelled mid-transfer."""
 
 

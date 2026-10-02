@@ -1,19 +1,20 @@
-# asset_registry.py — catalog of every downloadable model/engine/language asset, plus the
+# asset_registry.py - catalog of every downloadable model/engine/language asset, plus the
 # blocking download/delete actions the "Manage Models" screen drives through asset_manager.py
 
 import logging
 from pathlib import Path
-from typing import Callable, Optional, TypedDict
+from typing import Any, Callable, Optional, TypedDict
 
 import argostranslate.package
 from faster_whisper import WhisperModel
 from huggingface_hub import scan_cache_dir
 
-from ccgen.config.defaults import LanguageOptions, ModelDefaults
+from ccgen.config.defaults import LanguageOptions, ModelDefaults, ModelRepos
 from ccgen.engines.transliteration.neural_engine import NeuralEngine
 from ccgen.engines.transliteration.rekhta_backend import RekhtaBackend
 from ccgen.engines.translation.argos_engine import install_pair
 from ccgen.utils import model_status
+from ccgen.utils.callbacks import emit_status
 from ccgen.utils.download_progress import cancellable, download_progress
 
 _log = logging.getLogger(__name__)
@@ -30,22 +31,6 @@ ENGINE_NEURAL_M2M100 = "Neural (M2M100)"
 ENGINE_NEURAL_REKHTA = "Neural (Rekhta)"
 
 _TRANSLATION_SOURCE = "en"
-
-# Repo ids duplicated from model_status.py by design — that module keeps its own copy for
-# cache-status checks only, this one for size/download/delete; neither imports the other's.
-_WHISPER_REPOS: dict[str, str] = {
-    "tiny": "Systran/faster-whisper-tiny",
-    "base": "Systran/faster-whisper-base",
-    "small": "Systran/faster-whisper-small",
-    "medium": "Systran/faster-whisper-medium",
-    "large-v3": "Systran/faster-whisper-large-v3",
-}
-_NEURAL_TOKENIZER_REPO = "Mavkif/m2m100_rup_tokenizer_both"
-_NEURAL_MODEL_REPOS: dict[tuple[str, str], str] = {
-    ("ur", "roman"): "Mavkif/m2m100_rup_ur_to_rur",
-    ("roman", "ur"): "Mavkif/m2m100_rup_rur_to_ur",
-}
-_REKHTA_REPO = "rekhtalabs/hi-2-ur-translit"
 
 # Approximate sizes for not-yet-downloaded assets, in MB. Unlike Whisper's well-published
 # sizes, Argos and these vendored repos expose no size field for uninstalled packages, so
@@ -73,8 +58,13 @@ class AssetInfo(TypedDict):
 
 
 def list_assets() -> list[AssetInfo]:
-    """Build the full catalog of downloadable assets with their current cached state."""
-    return _whisper_assets() + _translation_assets() + _transliteration_assets()
+    """Build the full catalog of downloadable assets with their current cached state.
+
+    The Hugging Face cache is scanned once and shared by every row, since each scan walks the
+    whole cache directory and the catalog checks a dozen repos.
+    """
+    cache_info = _scan_cache()
+    return _whisper_assets(cache_info) + _translation_assets() + _transliteration_assets(cache_info)
 
 
 def download_asset(
@@ -90,7 +80,7 @@ def download_asset(
         # worker actually starts, rather than waiting on a first byte-progress tick that some
         # download paths (large multi-file Hugging Face repos in particular) may report late
         # or not at all.
-        _cb(progress_cb, "Downloading...")
+        emit_status(progress_cb, "Downloading...")
         with cancellable(cancel_check):
             if category == CATEGORY_WHISPER:
                 _download_whisper(key, progress_num_cb)
@@ -112,7 +102,7 @@ def delete_asset(asset_id: str) -> None:
     try:
         category, key = _split_id(asset_id)
         if category == CATEGORY_WHISPER:
-            _delete_hf_repo(_WHISPER_REPOS[key])
+            _delete_hf_repo(ModelRepos.WHISPER[key])
         elif category == CATEGORY_TRANSLATION:
             _delete_translation_pair(_TRANSLATION_SOURCE, key)
         elif category == CATEGORY_TRANSLITERATION:
@@ -124,18 +114,18 @@ def delete_asset(asset_id: str) -> None:
         raise RuntimeError(f"Remove failed: {e}") from e
 
 
-def _whisper_assets() -> list[AssetInfo]:
+def _whisper_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
     """Build the Whisper Models category rows."""
     assets: list[AssetInfo] = []
     for name in ModelDefaults.SUPPORTED_MODELS:
-        downloaded = model_status.whisper_cached(name)
+        downloaded = model_status.whisper_cached(name, cache_info=cache_info)
         assets.append(AssetInfo(
             id=f"{CATEGORY_WHISPER}:{name}",
             category=CATEGORY_WHISPER,
             engine=ENGINE_FASTER_WHISPER,
             label=name,
             downloaded=downloaded,
-            size_bytes=_hf_repo_size(_WHISPER_REPOS[name]) if downloaded else None,
+            size_bytes=_hf_repo_size(ModelRepos.WHISPER[name], cache_info) if downloaded else None,
             approx_size_mb=ModelDefaults.MODEL_SIZES_MB.get(name),
         ))
     return assets
@@ -160,31 +150,31 @@ def _translation_assets() -> list[AssetInfo]:
     return assets
 
 
-def _transliteration_assets() -> list[AssetInfo]:
+def _transliteration_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
     """Build the Transliteration Models category rows."""
     assets: list[AssetInfo] = []
     for key, pair, label in (
         ("roman-ur", ("roman", "ur"), "Roman → Urdu"),
         ("ur-roman", ("ur", "roman"), "Urdu → Roman"),
     ):
-        downloaded = model_status.neural_translit_cached(*pair)
+        downloaded = model_status.neural_translit_cached(*pair, cache_info=cache_info)
         assets.append(AssetInfo(
             id=f"{CATEGORY_TRANSLITERATION}:{key}",
             category=CATEGORY_TRANSLITERATION,
             engine=ENGINE_NEURAL_M2M100,
             label=label,
             downloaded=downloaded,
-            size_bytes=_translit_pair_size(_NEURAL_MODEL_REPOS[pair]) if downloaded else None,
+            size_bytes=_translit_pair_size(ModelRepos.M2M100[pair], cache_info) if downloaded else None,
             approx_size_mb=_TRANSLIT_APPROX_SIZES_MB.get(key),
         ))
-    rekhta_downloaded = model_status.neural_translit_cached("hi", "ur")
+    rekhta_downloaded = model_status.neural_translit_cached("hi", "ur", cache_info=cache_info)
     assets.append(AssetInfo(
         id=f"{CATEGORY_TRANSLITERATION}:hi-ur",
         category=CATEGORY_TRANSLITERATION,
         engine=ENGINE_NEURAL_REKHTA,
         label="Hindi/Punjabi → Urdu",
         downloaded=rekhta_downloaded,
-        size_bytes=_hf_repo_size(_REKHTA_REPO) if rekhta_downloaded else None,
+        size_bytes=_hf_repo_size(ModelRepos.REKHTA, cache_info) if rekhta_downloaded else None,
         approx_size_mb=_TRANSLIT_APPROX_SIZES_MB.get("hi-ur"),
     ))
     return assets
@@ -215,11 +205,11 @@ def _download_transliteration(
 def _delete_transliteration(key: str) -> None:
     """Delete one transliteration asset's model repo (the shared tokenizer is left in place)."""
     if key == "roman-ur":
-        _delete_hf_repo(_NEURAL_MODEL_REPOS[("roman", "ur")])
+        _delete_hf_repo(ModelRepos.M2M100[("roman", "ur")])
     elif key == "ur-roman":
-        _delete_hf_repo(_NEURAL_MODEL_REPOS[("ur", "roman")])
+        _delete_hf_repo(ModelRepos.M2M100[("ur", "roman")])
     elif key == "hi-ur":
-        _delete_hf_repo(_REKHTA_REPO)
+        _delete_hf_repo(ModelRepos.REKHTA)
     else:
         raise ValueError(f"Unknown transliteration asset: {key}")
 
@@ -242,10 +232,20 @@ def _delete_translation_pair(source: str, target: str) -> None:
         argostranslate.package.uninstall(pkg)
 
 
-def _hf_repo_size(repo_id: str) -> Optional[int]:
+def _scan_cache() -> Optional[Any]:
+    """Scan the Hugging Face cache once for a catalog build; None when the scan fails."""
+    try:
+        return scan_cache_dir()
+    except Exception:
+        _log.debug("Failed to scan Hugging Face cache", exc_info=True)
+        return None
+
+
+def _hf_repo_size(repo_id: str, cache_info: Optional[Any] = None) -> Optional[int]:
     """Return the on-disk size of a cached Hugging Face repo, or None when not cached."""
     try:
-        cache_info = scan_cache_dir()
+        if cache_info is None:
+            cache_info = scan_cache_dir()
         repo = next((r for r in cache_info.repos if r.repo_id == repo_id), None)
         return repo.size_on_disk if repo else None
     except Exception:
@@ -253,12 +253,12 @@ def _hf_repo_size(repo_id: str) -> Optional[int]:
         return None
 
 
-def _translit_pair_size(model_repo: str) -> Optional[int]:
+def _translit_pair_size(model_repo: str, cache_info: Optional[Any] = None) -> Optional[int]:
     """Return the combined size of an M2M100 direction repo plus the shared tokenizer repo."""
-    model_size = _hf_repo_size(model_repo)
+    model_size = _hf_repo_size(model_repo, cache_info)
     if model_size is None:
         return None
-    return model_size + (_hf_repo_size(_NEURAL_TOKENIZER_REPO) or 0)
+    return model_size + (_hf_repo_size(ModelRepos.M2M100_TOKENIZER, cache_info) or 0)
 
 
 def _installed_pair_size(source: str, target: str) -> Optional[int]:
@@ -278,12 +278,3 @@ def _split_id(asset_id: str) -> tuple[str, str]:
     """Split an asset id like 'whisper:tiny' into (category, key)."""
     category, _, key = asset_id.partition(":")
     return category, key
-
-
-def _cb(fn: Optional[Callable[[str], None]], msg: str) -> None:
-    """Call a progress callback safely when present."""
-    try:
-        if fn:
-            fn(msg)
-    except Exception:
-        pass

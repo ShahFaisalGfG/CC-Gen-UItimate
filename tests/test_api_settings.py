@@ -1,5 +1,8 @@
 # test_api_settings.py - tests for /settings GET, PUT, and reset routes
 
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,6 +20,8 @@ def isolated_settings_file(tmp_path, monkeypatch):
     """Redirect settings persistence to a scratch file so tests never touch real user config."""
     settings_path = str(tmp_path / "settings.json")
     monkeypatch.setattr("ccgen.utils.settings.get_settings_file", lambda: settings_path)
+    # Resetting defaults re-applies logging prefs; keep that from opening a real log file.
+    monkeypatch.setattr("ccgen.api.services.settings_service.configure_from_settings", lambda *args: None)
 
 
 class TestGetSettings:
@@ -58,3 +63,23 @@ class TestResetSettings:
         client.put("/settings", json={"key": "ui.theme", "value": "dark"})
         client.post("/settings/reset")
         assert client.get("/settings").json() == get_default_settings()
+
+
+class TestPatchSettings:
+    def test_updates_several_keys_in_one_save(self, client):
+        resp = client.patch("/settings", json={"values": {"model.name": "small", "output.vtt": True}})
+        assert resp.status_code == 200
+        data = client.get("/settings").json()
+        assert data["model"]["name"] == "small"
+        assert data["output"]["vtt"] is True
+
+    def test_logging_change_reconfigures_logging(self, client):
+        with patch("ccgen.api.services.settings_service.configure_from_settings") as configure:
+            client.patch("/settings", json={"values": {"logging.log_level": "all"}})
+        assert configure.call_args.args[0]["logging"]["log_level"] == "all"
+
+    def test_concurrent_updates_are_not_lost(self, client):
+        keys = [f"custom.k{i}" for i in range(12)]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            list(pool.map(lambda k: client.put("/settings", json={"key": k, "value": 1}), keys))
+        assert set(client.get("/settings").json()["custom"]) == {k.split(".")[1] for k in keys}

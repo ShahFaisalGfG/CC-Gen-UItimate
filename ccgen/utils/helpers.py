@@ -1,7 +1,10 @@
-# helpers.py — path and formatting utilities for CC-Gen-Ultimate
+# helpers.py - path and formatting utilities for CC-Gen-Ultimate
 
 import os
 import sys
+from typing import Any
+
+from PySide6.QtCore import QUrl
 
 
 def resource_path(relative: str) -> str:
@@ -14,6 +17,22 @@ def resource_path(relative: str) -> str:
         return os.path.normpath(os.path.join(base, relative))
     except Exception:
         return relative
+
+
+def plural(count: int, noun: str) -> str:
+    """Return "1 file" / "3 files" style counts for user-facing messages."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def to_local_path(value: Any) -> str:
+    """Convert a QUrl, file:// URL string, or plain path into a normalized local path."""
+    if hasattr(value, "toLocalFile"):
+        text = value.toLocalFile() or value.toString()
+    else:
+        text = str(value)
+        if text.startswith("file:"):
+            text = QUrl(text).toLocalFile()
+    return os.path.normpath(text) if text else ""
 
 
 def format_seconds(seconds: float) -> str:
