@@ -45,14 +45,23 @@ def set_many(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _assign(settings: dict[str, Any], key: str, value: Any) -> None:
-    """Write `value` at a dot-separated path, creating intermediate sections as needed."""
-    node = settings
+    """Write `value` at a dot-separated path the defaults define.
+
+    Raises ValueError for any other key: loading drops keys the defaults don't define, so
+    accepting one here would report a save that silently disappears on the next read.
+    """
     parts = key.split(".")
+    node, defaults = settings, get_default_settings()
     for part in parts[:-1]:
+        defaults = defaults.get(part) if isinstance(defaults, dict) else None
+        if not isinstance(defaults, dict):
+            raise ValueError(f"Unknown setting: {key}")
         child = node.get(part)
         if not isinstance(child, dict):
             child = node[part] = {}
         node = child
+    if parts[-1] not in defaults or isinstance(defaults[parts[-1]], dict):
+        raise ValueError(f"Unknown setting: {key}")
     node[parts[-1]] = value
 
 

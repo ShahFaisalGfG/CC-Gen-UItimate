@@ -4,19 +4,32 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Combo box for {label, code} option lists. `readiness` maps a code to true (downloaded) or
-// false (downloads on first use) and adds a badge to that row and to the tooltip.
+// Combo box for {label, code} option lists. Bind `value` to the option it shows; the box
+// follows it as it changes and flags a value missing from the list instead of silently showing
+// another one. `readiness` maps a code to true (downloaded) or false (downloads on first use)
+// and adds a badge to that row and to the tooltip.
 ComboBox {
     id: control
 
+    property var value: undefined
     property var readiness: ({})
     property string accessibleName: ""
     property string toolTipText: ""
+    readonly property bool valueMissing: control.value !== undefined && control.value !== null
+        && control.count > 0 && control.indexOfValue(control.value) < 0
 
     function selectCode(code) {
         var idx = control.indexOfValue(code)
         if (idx >= 0) control.currentIndex = idx
     }
+
+    function _sync() {
+        if (control.value !== undefined) control.selectCode(control.value)
+    }
+
+    onValueChanged: control._sync()
+    onCountChanged: control._sync()
+    Component.onCompleted: control._sync()
 
     function _badge(code) {
         var ready = control.readiness[code]
@@ -35,9 +48,10 @@ ComboBox {
     Accessible.description: control.toolTipText
 
     ToolTip.visible: control.toolTipText.length > 0 && !control.popup.visible && (control.hovered || control.visualFocus)
-    ToolTip.text: control._badge(control.currentValue)
-        ? control.toolTipText + "\n" + control.currentText + ": " + control._badge(control.currentValue).toLowerCase() + "."
-        : control.toolTipText
+    ToolTip.text: (control.valueMissing ? "The saved choice \"" + control.value + "\" isn't available here. Pick another.\n" : "")
+        + (control._badge(control.currentValue)
+           ? control.toolTipText + "\n" + control.currentText + ": " + control._badge(control.currentValue).toLowerCase() + "."
+           : control.toolTipText)
     ToolTip.delay: 600
 
     contentItem: Text {
@@ -62,8 +76,8 @@ ComboBox {
     background: Rectangle {
         radius: Theme.radius
         color: control.hovered && control.enabled ? Theme.surfaceHover : Theme.surface
-        border.width: control.visualFocus ? 2 : 1
-        border.color: control.visualFocus ? Theme.focusRing : Theme.border
+        border.width: control.visualFocus || control.valueMissing ? 2 : 1
+        border.color: control.visualFocus ? Theme.focusRing : control.valueMissing ? Theme.warning : Theme.border
     }
 
     delegate: ItemDelegate {
@@ -104,6 +118,9 @@ ComboBox {
         width: Math.max(control.width, 220)
         implicitHeight: Math.min(contentItem.implicitHeight + 8, 320)
         padding: 4
+        // Keeps the list inside the window; near the bottom edge it shifts up instead of
+        // opening off-screen.
+        margins: Theme.spaceSm
 
         contentItem: ListView {
             clip: true

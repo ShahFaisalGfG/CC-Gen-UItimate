@@ -5,7 +5,8 @@ from typing import Any, Optional
 from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtWebSockets import QWebSocket
 
-from ccgen.config.defaults import ModelRepos
+from ccgen.config.capabilities import neural_model_key, translation_asset_ids
+from ccgen.config.voices import ENGINE_KOKORO, ENGINE_PIPER, ENGINE_XTTS
 from ccgen.controllers.api_client import ApiClient
 
 
@@ -45,19 +46,23 @@ class AssetsController(QObject):
         """Catalog id of a Whisper model."""
         return f"whisper:{model_name}"
 
-    @Slot(str, result=str)
-    def translationAssetId(self, target: str) -> str:
-        """Catalog id of the English→target translation package ("" for English itself)."""
-        return "" if target == "en" else f"translation:{target}"
+    @Slot(str, str, result=list)
+    def translationAssetIds(self, source: str, target: str) -> list:
+        """Catalog ids of every package translating source→target needs (none for "auto" source)."""
+        return translation_asset_ids("" if source == "auto" else source, target)
+
+    @Slot(str, str, result=str)
+    def voiceAssetId(self, mode: str, voice_key: str) -> str:
+        """Catalog id of what a dubbing mode downloads: its model, or a Piper voice ("" when unknown)."""
+        if mode == ENGINE_PIPER:
+            return f"voices:{voice_key}" if voice_key.startswith(f"{ENGINE_PIPER}:") else ""
+        return f"voices:{mode}" if mode in (ENGINE_XTTS, ENGINE_KOKORO) else ""
 
     @Slot(str, str, result=str)
     def neuralAssetId(self, source: str, target: str) -> str:
         """Catalog id of the neural transliteration model for a script pair, "" when none exists."""
-        if (source, target) in ModelRepos.M2M100:
-            return f"transliteration:{source}-{target}"
-        if source in ("hi", "pa") and target == "ur":
-            return "transliteration:hi-ur"
-        return ""
+        key = neural_model_key(source, target)
+        return f"transliteration:{key}" if key else ""
 
     @Slot()
     def refreshAssets(self) -> None:

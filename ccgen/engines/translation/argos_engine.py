@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 import argostranslate.package
 import argostranslate.translate
 
+from ccgen.config.capabilities import PIVOT_LANGUAGE as _PIVOT_LANG
 from ccgen.config.defaults import TranslationDefaults
 from ccgen.core import Segment, TranslatedSegment
 from ccgen.engines.translation.base import TranslationEngine
@@ -14,9 +15,6 @@ from ccgen.utils.download_progress import download_progress
 
 _log = logging.getLogger(__name__)
 
-# Argos publishes most language pairs only to and from English, and chains two installed
-# packages through a shared language automatically, so English is the pivot for other pairs.
-_PIVOT_LANG = "en"
 
 
 def install_pair(

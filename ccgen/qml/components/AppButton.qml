@@ -32,6 +32,12 @@ Button {
     rightPadding: control._iconOnly ? 0 : (control.compact ? 10 : 14)
     topPadding: 0
     bottomPadding: 0
+    // The Material style insets the background 6 px top and bottom by default, which drew every
+    // button 12 px shorter than its layout height (cramped pills, misaligned with text fields).
+    topInset: 0
+    bottomInset: 0
+    leftInset: 0
+    rightInset: 0
     font.family: Theme.fontFamily
     font.pixelSize: Theme.fontBody
     focusPolicy: Qt.StrongFocus

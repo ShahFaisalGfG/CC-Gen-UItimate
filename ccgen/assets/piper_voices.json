@@ -1,0 +1,1421 @@
+{
+  "source": "https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json",
+  "voices": [
+    {
+      "id": "ar_JO-kareem-low",
+      "language": "ar",
+      "label": "Arabic (ar_JO) - kareem [low]",
+      "model_path": "ar/ar_JO/kareem/low",
+      "approx_size_bytes": 63206316,
+      "card": "ar/ar_JO/kareem/low/MODEL_CARD"
+    },
+    {
+      "id": "ar_JO-kareem-medium",
+      "language": "ar",
+      "label": "Arabic (ar_JO) - kareem [medium]",
+      "model_path": "ar/ar_JO/kareem/medium",
+      "approx_size_bytes": 63206318,
+      "card": "ar/ar_JO/kareem/medium/MODEL_CARD"
+    },
+    {
+      "id": "bg_BG-dimitar-medium",
+      "language": "bg",
+      "label": "Bulgarian (bg_BG) - dimitar [medium]",
+      "model_path": "bg/bg_BG/dimitar/medium",
+      "approx_size_bytes": 63227107,
+      "card": "bg/bg_BG/dimitar/medium/MODEL_CARD"
+    },
+    {
+      "id": "bn_BD-google-medium",
+      "language": "bn",
+      "label": "Bengali (bn_BD) - google [medium]",
+      "model_path": "bn/bn_BD/google/medium",
+      "approx_size_bytes": 76788009,
+      "card": "bn/bn_BD/google/medium/MODEL_CARD"
+    },
+    {
+      "id": "ca_ES-upc_ona-medium",
+      "language": "ca",
+      "label": "Catalan (ca_ES) - upc_ona [medium]",
+      "model_path": "ca/ca_ES/upc_ona/medium",
+      "approx_size_bytes": 63206169,
+      "card": "ca/ca_ES/upc_ona/medium/MODEL_CARD"
+    },
+    {
+      "id": "ca_ES-upc_ona-x_low",
+      "language": "ca",
+      "label": "Catalan (ca_ES) - upc_ona [x_low]",
+      "model_path": "ca/ca_ES/upc_ona/x_low",
+      "approx_size_bytes": 20632972,
+      "card": "ca/ca_ES/upc_ona/x_low/MODEL_CARD"
+    },
+    {
+      "id": "ca_ES-upc_pau-x_low",
+      "language": "ca",
+      "label": "Catalan (ca_ES) - upc_pau [x_low]",
+      "model_path": "ca/ca_ES/upc_pau/x_low",
+      "approx_size_bytes": 28134950,
+      "card": "ca/ca_ES/upc_pau/x_low/MODEL_CARD"
+    },
+    {
+      "id": "cs_CZ-jirka-low",
+      "language": "cs",
+      "label": "Czech (cs_CZ) - jirka [low]",
+      "model_path": "cs/cs_CZ/jirka/low",
+      "approx_size_bytes": 63206316,
+      "card": "cs/cs_CZ/jirka/low/MODEL_CARD"
+    },
+    {
+      "id": "cs_CZ-jirka-medium",
+      "language": "cs",
+      "label": "Czech (cs_CZ) - jirka [medium]",
+      "model_path": "cs/cs_CZ/jirka/medium",
+      "approx_size_bytes": 63206319,
+      "card": "cs/cs_CZ/jirka/medium/MODEL_CARD"
+    },
+    {
+      "id": "cs_CZ-kasandra-medium",
+      "language": "cs",
+      "label": "Czech (cs_CZ) - kasandra [medium]",
+      "model_path": "cs/cs_CZ/kasandra/medium",
+      "approx_size_bytes": 63514270,
+      "card": "cs/cs_CZ/kasandra/medium/MODEL_CARD"
+    },
+    {
+      "id": "cy_GB-bu_tts-medium",
+      "language": "cy",
+      "label": "Welsh (cy_GB) - bu_tts [medium]",
+      "model_path": "cy/cy_GB/bu_tts/medium",
+      "approx_size_bytes": 77066471,
+      "card": "cy/cy_GB/bu_tts/medium/MODEL_CARD"
+    },
+    {
+      "id": "cy_GB-gwryw_gogleddol-medium",
+      "language": "cy",
+      "label": "Welsh (cy_GB) - gwryw_gogleddol [medium]",
+      "model_path": "cy/cy_GB/gwryw_gogleddol/medium",
+      "approx_size_bytes": 63516013,
+      "card": "cy/cy_GB/gwryw_gogleddol/medium/MODEL_CARD"
+    },
+    {
+      "id": "da_DK-talesyntese-medium",
+      "language": "da",
+      "label": "Danish (da_DK) - talesyntese [medium]",
+      "model_path": "da/da_DK/talesyntese/medium",
+      "approx_size_bytes": 63206172,
+      "card": "da/da_DK/talesyntese/medium/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-eva_k-x_low",
+      "language": "de",
+      "label": "German (de_DE) - eva_k [x_low]",
+      "model_path": "de/de_DE/eva_k/x_low",
+      "approx_size_bytes": 20632971,
+      "card": "de/de_DE/eva_k/x_low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-karlsson-low",
+      "language": "de",
+      "label": "German (de_DE) - karlsson [low]",
+      "model_path": "de/de_DE/karlsson/low",
+      "approx_size_bytes": 63108685,
+      "card": "de/de_DE/karlsson/low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-kerstin-low",
+      "language": "de",
+      "label": "German (de_DE) - kerstin [low]",
+      "model_path": "de/de_DE/kerstin/low",
+      "approx_size_bytes": 63108684,
+      "card": "de/de_DE/kerstin/low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-mls-medium",
+      "language": "de",
+      "label": "German (de_DE) - mls [medium]",
+      "model_path": "de/de_DE/mls/medium",
+      "approx_size_bytes": 76970027,
+      "card": "de/de_DE/mls/medium/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-pavoque-low",
+      "language": "de",
+      "label": "German (de_DE) - pavoque [low]",
+      "model_path": "de/de_DE/pavoque/low",
+      "approx_size_bytes": 63108684,
+      "card": "de/de_DE/pavoque/low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-ramona-low",
+      "language": "de",
+      "label": "German (de_DE) - ramona [low]",
+      "model_path": "de/de_DE/ramona/low",
+      "approx_size_bytes": 63108683,
+      "card": "de/de_DE/ramona/low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-thorsten-high",
+      "language": "de",
+      "label": "German (de_DE) - thorsten [high]",
+      "model_path": "de/de_DE/thorsten/high",
+      "approx_size_bytes": 113900076,
+      "card": "de/de_DE/thorsten/high/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-thorsten-low",
+      "language": "de",
+      "label": "German (de_DE) - thorsten [low]",
+      "model_path": "de/de_DE/thorsten/low",
+      "approx_size_bytes": 63108685,
+      "card": "de/de_DE/thorsten/low/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-thorsten-medium",
+      "language": "de",
+      "label": "German (de_DE) - thorsten [medium]",
+      "model_path": "de/de_DE/thorsten/medium",
+      "approx_size_bytes": 63206113,
+      "card": "de/de_DE/thorsten/medium/MODEL_CARD"
+    },
+    {
+      "id": "de_DE-thorsten_emotional-medium",
+      "language": "de",
+      "label": "German (de_DE) - thorsten_emotional [medium]",
+      "model_path": "de/de_DE/thorsten_emotional/medium",
+      "approx_size_bytes": 76750936,
+      "card": "de/de_DE/thorsten_emotional/medium/MODEL_CARD"
+    },
+    {
+      "id": "el_GR-joy-medium",
+      "language": "el",
+      "label": "Greek (el_GR) - joy [medium]",
+      "model_path": "el/el_GR/joy/medium",
+      "approx_size_bytes": 63523417,
+      "card": "el/el_GR/joy/medium/MODEL_CARD"
+    },
+    {
+      "id": "el_GR-rapunzelina-low",
+      "language": "el",
+      "label": "Greek (el_GR) - rapunzelina [low]",
+      "model_path": "el/el_GR/rapunzelina/low",
+      "approx_size_bytes": 63108724,
+      "card": "el/el_GR/rapunzelina/low/MODEL_CARD"
+    },
+    {
+      "id": "el_GR-rapunzelina-medium",
+      "language": "el",
+      "label": "Greek (el_GR) - rapunzelina [medium]",
+      "model_path": "el/el_GR/rapunzelina/medium",
+      "approx_size_bytes": 62955017,
+      "card": "el/el_GR/rapunzelina/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-alan-low",
+      "language": "en",
+      "label": "English (en_GB) - alan [low]",
+      "model_path": "en/en_GB/alan/low",
+      "approx_size_bytes": 63108696,
+      "card": "en/en_GB/alan/low/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-alan-medium",
+      "language": "en",
+      "label": "English (en_GB) - alan [medium]",
+      "model_path": "en/en_GB/alan/medium",
+      "approx_size_bytes": 63206182,
+      "card": "en/en_GB/alan/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-alba-medium",
+      "language": "en",
+      "label": "English (en_GB) - alba [medium]",
+      "model_path": "en/en_GB/alba/medium",
+      "approx_size_bytes": 63206182,
+      "card": "en/en_GB/alba/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-aru-medium",
+      "language": "en",
+      "label": "English (en_GB) - aru [medium]",
+      "model_path": "en/en_GB/aru/medium",
+      "approx_size_bytes": 76759145,
+      "card": "en/en_GB/aru/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-cori-high",
+      "language": "en",
+      "label": "English (en_GB) - cori [high]",
+      "model_path": "en/en_GB/cori/high",
+      "approx_size_bytes": 114224315,
+      "card": "en/en_GB/cori/high/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-cori-medium",
+      "language": "en",
+      "label": "English (en_GB) - cori [medium]",
+      "model_path": "en/en_GB/cori/medium",
+      "approx_size_bytes": 63536345,
+      "card": "en/en_GB/cori/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-jenny_dioco-medium",
+      "language": "en",
+      "label": "English (en_GB) - jenny_dioco [medium]",
+      "model_path": "en/en_GB/jenny_dioco/medium",
+      "approx_size_bytes": 63206189,
+      "card": "en/en_GB/jenny_dioco/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-northern_english_male-medium",
+      "language": "en",
+      "label": "English (en_GB) - northern_english_male [medium]",
+      "model_path": "en/en_GB/northern_english_male/medium",
+      "approx_size_bytes": 63206141,
+      "card": "en/en_GB/northern_english_male/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-semaine-medium",
+      "language": "en",
+      "label": "English (en_GB) - semaine [medium]",
+      "model_path": "en/en_GB/semaine/medium",
+      "approx_size_bytes": 76742787,
+      "card": "en/en_GB/semaine/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-southern_english_female-low",
+      "language": "en",
+      "label": "English (en_GB) - southern_english_female [low]",
+      "model_path": "en/en_GB/southern_english_female/low",
+      "approx_size_bytes": 63108715,
+      "card": "en/en_GB/southern_english_female/low/MODEL_CARD"
+    },
+    {
+      "id": "en_GB-vctk-medium",
+      "language": "en",
+      "label": "English (en_GB) - vctk [medium]",
+      "model_path": "en/en_GB/vctk/medium",
+      "approx_size_bytes": 76959390,
+      "card": "en/en_GB/vctk/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-amy-low",
+      "language": "en",
+      "label": "English (en_US) - amy [low]",
+      "model_path": "en/en_US/amy/low",
+      "approx_size_bytes": 63108690,
+      "card": "en/en_US/amy/low/MODEL_CARD"
+    },
+    {
+      "id": "en_US-amy-medium",
+      "language": "en",
+      "label": "English (en_US) - amy [medium]",
+      "model_path": "en/en_US/amy/medium",
+      "approx_size_bytes": 63206176,
+      "card": "en/en_US/amy/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-arctic-medium",
+      "language": "en",
+      "label": "English (en_US) - arctic [medium]",
+      "model_path": "en/en_US/arctic/medium",
+      "approx_size_bytes": 76771533,
+      "card": "en/en_US/arctic/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-bryce-medium",
+      "language": "en",
+      "label": "English (en_US) - bryce [medium]",
+      "model_path": "en/en_US/bryce/medium",
+      "approx_size_bytes": 63536345,
+      "card": "en/en_US/bryce/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-danny-low",
+      "language": "en",
+      "label": "English (en_US) - danny [low]",
+      "model_path": "en/en_US/danny/low",
+      "approx_size_bytes": 63108692,
+      "card": "en/en_US/danny/low/MODEL_CARD"
+    },
+    {
+      "id": "en_US-hfc_female-medium",
+      "language": "en",
+      "label": "English (en_US) - hfc_female [medium]",
+      "model_path": "en/en_US/hfc_female/medium",
+      "approx_size_bytes": 63206327,
+      "card": "en/en_US/hfc_female/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-hfc_male-medium",
+      "language": "en",
+      "label": "English (en_US) - hfc_male [medium]",
+      "model_path": "en/en_US/hfc_male/medium",
+      "approx_size_bytes": 63206327,
+      "card": "en/en_US/hfc_male/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-joe-medium",
+      "language": "en",
+      "label": "English (en_US) - joe [medium]",
+      "model_path": "en/en_US/joe/medium",
+      "approx_size_bytes": 63206088,
+      "card": "en/en_US/joe/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-john-medium",
+      "language": "en",
+      "label": "English (en_US) - john [medium]",
+      "model_path": "en/en_US/john/medium",
+      "approx_size_bytes": 63536344,
+      "card": "en/en_US/john/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-kathleen-low",
+      "language": "en",
+      "label": "English (en_US) - kathleen [low]",
+      "model_path": "en/en_US/kathleen/low",
+      "approx_size_bytes": 63108695,
+      "card": "en/en_US/kathleen/low/MODEL_CARD"
+    },
+    {
+      "id": "en_US-kristin-medium",
+      "language": "en",
+      "label": "English (en_US) - kristin [medium]",
+      "model_path": "en/en_US/kristin/medium",
+      "approx_size_bytes": 63536347,
+      "card": "en/en_US/kristin/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-kusal-medium",
+      "language": "en",
+      "label": "English (en_US) - kusal [medium]",
+      "model_path": "en/en_US/kusal/medium",
+      "approx_size_bytes": 63206178,
+      "card": "en/en_US/kusal/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-l2arctic-medium",
+      "language": "en",
+      "label": "English (en_US) - l2arctic [medium]",
+      "model_path": "en/en_US/l2arctic/medium",
+      "approx_size_bytes": 76783925,
+      "card": "en/en_US/l2arctic/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-lessac-high",
+      "language": "en",
+      "label": "English (en_US) - lessac [high]",
+      "model_path": "en/en_US/lessac/high",
+      "approx_size_bytes": 113900084,
+      "card": "en/en_US/lessac/high/MODEL_CARD"
+    },
+    {
+      "id": "en_US-lessac-low",
+      "language": "en",
+      "label": "English (en_US) - lessac [low]",
+      "model_path": "en/en_US/lessac/low",
+      "approx_size_bytes": 63206176,
+      "card": "en/en_US/lessac/low/MODEL_CARD"
+    },
+    {
+      "id": "en_US-lessac-medium",
+      "language": "en",
+      "label": "English (en_US) - lessac [medium]",
+      "model_path": "en/en_US/lessac/medium",
+      "approx_size_bytes": 63206179,
+      "card": "en/en_US/lessac/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-libritts-high",
+      "language": "en",
+      "label": "English (en_US) - libritts [high]",
+      "model_path": "en/en_US/libritts/high",
+      "approx_size_bytes": 136693974,
+      "card": "en/en_US/libritts/high/MODEL_CARD"
+    },
+    {
+      "id": "en_US-libritts_r-medium",
+      "language": "en",
+      "label": "English (en_US) - libritts_r [medium]",
+      "model_path": "en/en_US/libritts_r/medium",
+      "approx_size_bytes": 78601037,
+      "card": "en/en_US/libritts_r/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-ljspeech-high",
+      "language": "en",
+      "label": "English (en_US) - ljspeech [high]",
+      "model_path": "en/en_US/ljspeech/high",
+      "approx_size_bytes": 114203981,
+      "card": "en/en_US/ljspeech/high/MODEL_CARD"
+    },
+    {
+      "id": "en_US-ljspeech-medium",
+      "language": "en",
+      "label": "English (en_US) - ljspeech [medium]",
+      "model_path": "en/en_US/ljspeech/medium",
+      "approx_size_bytes": 63536351,
+      "card": "en/en_US/ljspeech/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-mike-medium",
+      "language": "en",
+      "label": "English (en_US) - mike [medium]",
+      "model_path": "en/en_US/mike/medium",
+      "approx_size_bytes": 63227423,
+      "card": "en/en_US/mike/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-norman-medium",
+      "language": "en",
+      "label": "English (en_US) - norman [medium]",
+      "model_path": "en/en_US/norman/medium",
+      "approx_size_bytes": 63536347,
+      "card": "en/en_US/norman/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-reza_ibrahim-medium",
+      "language": "en",
+      "label": "English (en_US) - reza_ibrahim [medium]",
+      "model_path": "en/en_US/reza_ibrahim/medium",
+      "approx_size_bytes": 63516014,
+      "card": "en/en_US/reza_ibrahim/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-ryan-high",
+      "language": "en",
+      "label": "English (en_US) - ryan [high]",
+      "model_path": "en/en_US/ryan/high",
+      "approx_size_bytes": 120790958,
+      "card": "en/en_US/ryan/high/MODEL_CARD"
+    },
+    {
+      "id": "en_US-ryan-low",
+      "language": "en",
+      "label": "English (en_US) - ryan [low]",
+      "model_path": "en/en_US/ryan/low",
+      "approx_size_bytes": 63108691,
+      "card": "en/en_US/ryan/low/MODEL_CARD"
+    },
+    {
+      "id": "en_US-ryan-medium",
+      "language": "en",
+      "label": "English (en_US) - ryan [medium]",
+      "model_path": "en/en_US/ryan/medium",
+      "approx_size_bytes": 63206177,
+      "card": "en/en_US/ryan/medium/MODEL_CARD"
+    },
+    {
+      "id": "en_US-sam-medium",
+      "language": "en",
+      "label": "English (en_US) - sam [medium]",
+      "model_path": "en/en_US/sam/medium",
+      "approx_size_bytes": 62955084,
+      "card": "en/en_US/sam/medium/MODEL_CARD"
+    },
+    {
+      "id": "es_AR-daniela-high",
+      "language": "es",
+      "label": "Spanish (es_AR) - daniela [high]",
+      "model_path": "es/es_AR/daniela/high",
+      "approx_size_bytes": 114206259,
+      "card": "es/es_AR/daniela/high/MODEL_CARD"
+    },
+    {
+      "id": "es_ES-carlfm-x_low",
+      "language": "es",
+      "label": "Spanish (es_ES) - carlfm [x_low]",
+      "model_path": "es/es_ES/carlfm/x_low",
+      "approx_size_bytes": 28134950,
+      "card": "es/es_ES/carlfm/x_low/MODEL_CARD"
+    },
+    {
+      "id": "es_ES-davefx-medium",
+      "language": "es",
+      "label": "Spanish (es_ES) - davefx [medium]",
+      "model_path": "es/es_ES/davefx/medium",
+      "approx_size_bytes": 63206111,
+      "card": "es/es_ES/davefx/medium/MODEL_CARD"
+    },
+    {
+      "id": "es_ES-mls_10246-low",
+      "language": "es",
+      "label": "Spanish (es_ES) - mls_10246 [low]",
+      "model_path": "es/es_ES/mls_10246/low",
+      "approx_size_bytes": 63108686,
+      "card": "es/es_ES/mls_10246/low/MODEL_CARD"
+    },
+    {
+      "id": "es_ES-mls_9972-low",
+      "language": "es",
+      "label": "Spanish (es_ES) - mls_9972 [low]",
+      "model_path": "es/es_ES/mls_9972/low",
+      "approx_size_bytes": 63108685,
+      "card": "es/es_ES/mls_9972/low/MODEL_CARD"
+    },
+    {
+      "id": "es_ES-sharvard-medium",
+      "language": "es",
+      "label": "Spanish (es_ES) - sharvard [medium]",
+      "model_path": "es/es_ES/sharvard/medium",
+      "approx_size_bytes": 76738518,
+      "card": "es/es_ES/sharvard/medium/MODEL_CARD"
+    },
+    {
+      "id": "es_MX-ald-medium",
+      "language": "es",
+      "label": "Spanish (es_MX) - ald [medium]",
+      "model_path": "es/es_MX/ald/medium",
+      "approx_size_bytes": 63206172,
+      "card": "es/es_MX/ald/medium/MODEL_CARD"
+    },
+    {
+      "id": "es_MX-ald-x_low",
+      "language": "es",
+      "label": "Spanish (es_MX) - ald [x_low]",
+      "model_path": "es/es_MX/ald/x_low",
+      "approx_size_bytes": 20991829,
+      "card": "es/es_MX/ald/x_low/MODEL_CARD"
+    },
+    {
+      "id": "es_MX-claude-high",
+      "language": "es",
+      "label": "Spanish (es_MX) - claude [high]",
+      "model_path": "es/es_MX/claude/high",
+      "approx_size_bytes": 63127272,
+      "card": "es/es_MX/claude/high/MODEL_CARD"
+    },
+    {
+      "id": "et_EE-news-medium",
+      "language": "et",
+      "label": "Estonian (et_EE) - news [medium]",
+      "model_path": "et/et_EE/news/medium",
+      "approx_size_bytes": 76763257,
+      "card": "et/et_EE/news/medium/MODEL_CARD"
+    },
+    {
+      "id": "eu_ES-antton-medium",
+      "language": "eu",
+      "label": "Basque (eu_ES) - antton [medium]",
+      "model_path": "eu/eu_ES/antton/medium",
+      "approx_size_bytes": 63536455,
+      "card": "eu/eu_ES/antton/medium/MODEL_CARD"
+    },
+    {
+      "id": "eu_ES-maider-medium",
+      "language": "eu",
+      "label": "Basque (eu_ES) - maider [medium]",
+      "model_path": "eu/eu_ES/maider/medium",
+      "approx_size_bytes": 63536455,
+      "card": "eu/eu_ES/maider/medium/MODEL_CARD"
+    },
+    {
+      "id": "fa_IR-amir-medium",
+      "language": "fa",
+      "label": "Farsi (fa_IR) - amir [medium]",
+      "model_path": "fa/fa_IR/amir/medium",
+      "approx_size_bytes": 63536337,
+      "card": "fa/fa_IR/amir/medium/MODEL_CARD"
+    },
+    {
+      "id": "fa_IR-ganji-medium",
+      "language": "fa",
+      "label": "Farsi (fa_IR) - ganji [medium]",
+      "model_path": "fa/fa_IR/ganji/medium",
+      "approx_size_bytes": 63521008,
+      "card": "fa/fa_IR/ganji/medium/MODEL_CARD"
+    },
+    {
+      "id": "fa_IR-ganji_adabi-medium",
+      "language": "fa",
+      "label": "Farsi (fa_IR) - ganji_adabi [medium]",
+      "model_path": "fa/fa_IR/ganji_adabi/medium",
+      "approx_size_bytes": 63521014,
+      "card": "fa/fa_IR/ganji_adabi/medium/MODEL_CARD"
+    },
+    {
+      "id": "fa_IR-gyro-medium",
+      "language": "fa",
+      "label": "Farsi (fa_IR) - gyro [medium]",
+      "model_path": "fa/fa_IR/gyro/medium",
+      "approx_size_bytes": 63129519,
+      "card": "fa/fa_IR/gyro/medium/MODEL_CARD"
+    },
+    {
+      "id": "fa_IR-reza_ibrahim-medium",
+      "language": "fa",
+      "label": "Farsi (fa_IR) - reza_ibrahim [medium]",
+      "model_path": "fa/fa_IR/reza_ibrahim/medium",
+      "approx_size_bytes": 63516005,
+      "card": "fa/fa_IR/reza_ibrahim/medium/MODEL_CARD"
+    },
+    {
+      "id": "fi_FI-harri-low",
+      "language": "fi",
+      "label": "Finnish (fi_FI) - harri [low]",
+      "model_path": "fi/fi_FI/harri/low",
+      "approx_size_bytes": 69799346,
+      "card": "fi/fi_FI/harri/low/MODEL_CARD"
+    },
+    {
+      "id": "fi_FI-harri-medium",
+      "language": "fi",
+      "label": "Finnish (fi_FI) - harri [medium]",
+      "model_path": "fi/fi_FI/harri/medium",
+      "approx_size_bytes": 63206167,
+      "card": "fi/fi_FI/harri/medium/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-gilles-low",
+      "language": "fr",
+      "label": "French (fr_FR) - gilles [low]",
+      "model_path": "fr/fr_FR/gilles/low",
+      "approx_size_bytes": 63108684,
+      "card": "fr/fr_FR/gilles/low/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-mls-medium",
+      "language": "fr",
+      "label": "French (fr_FR) - mls [medium]",
+      "model_path": "fr/fr_FR/mls/medium",
+      "approx_size_bytes": 76740786,
+      "card": "fr/fr_FR/mls/medium/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-mls_1840-low",
+      "language": "fr",
+      "label": "French (fr_FR) - mls_1840 [low]",
+      "model_path": "fr/fr_FR/mls_1840/low",
+      "approx_size_bytes": 63108686,
+      "card": "fr/fr_FR/mls_1840/low/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-siwis-low",
+      "language": "fr",
+      "label": "French (fr_FR) - siwis [low]",
+      "model_path": "fr/fr_FR/siwis/low",
+      "approx_size_bytes": 28134948,
+      "card": "fr/fr_FR/siwis/low/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-siwis-medium",
+      "language": "fr",
+      "label": "French (fr_FR) - siwis [medium]",
+      "model_path": "fr/fr_FR/siwis/medium",
+      "approx_size_bytes": 63206169,
+      "card": "fr/fr_FR/siwis/medium/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-tom-medium",
+      "language": "fr",
+      "label": "French (fr_FR) - tom [medium]",
+      "model_path": "fr/fr_FR/tom/medium",
+      "approx_size_bytes": 63515997,
+      "card": "fr/fr_FR/tom/medium/MODEL_CARD"
+    },
+    {
+      "id": "fr_FR-upmc-medium",
+      "language": "fr",
+      "label": "French (fr_FR) - upmc [medium]",
+      "model_path": "fr/fr_FR/upmc/medium",
+      "approx_size_bytes": 76738611,
+      "card": "fr/fr_FR/upmc/medium/MODEL_CARD"
+    },
+    {
+      "id": "he_IL-saspeech-medium",
+      "language": "he",
+      "label": "Hebrew (he_IL) - saspeech [medium]",
+      "model_path": "he/he_IL/saspeech/medium",
+      "approx_size_bytes": 63227253,
+      "card": "he/he_IL/saspeech/medium/MODEL_CARD"
+    },
+    {
+      "id": "hi_IN-pratham-medium",
+      "language": "hi",
+      "label": "Hindi (hi_IN) - pratham [medium]",
+      "model_path": "hi/hi_IN/pratham/medium",
+      "approx_size_bytes": 63521020,
+      "card": "hi/hi_IN/pratham/medium/MODEL_CARD"
+    },
+    {
+      "id": "hi_IN-priyamvada-medium",
+      "language": "hi",
+      "label": "Hindi (hi_IN) - priyamvada [medium]",
+      "model_path": "hi/hi_IN/priyamvada/medium",
+      "approx_size_bytes": 63521023,
+      "card": "hi/hi_IN/priyamvada/medium/MODEL_CARD"
+    },
+    {
+      "id": "hi_IN-rohan-medium",
+      "language": "hi",
+      "label": "Hindi (hi_IN) - rohan [medium]",
+      "model_path": "hi/hi_IN/rohan/medium",
+      "approx_size_bytes": 62955085,
+      "card": "hi/hi_IN/rohan/medium/MODEL_CARD"
+    },
+    {
+      "id": "hu_HU-anna-medium",
+      "language": "hu",
+      "label": "Hungarian (hu_HU) - anna [medium]",
+      "model_path": "hu/hu_HU/anna/medium",
+      "approx_size_bytes": 63206312,
+      "card": "hu/hu_HU/anna/medium/MODEL_CARD"
+    },
+    {
+      "id": "hu_HU-berta-medium",
+      "language": "hu",
+      "label": "Hungarian (hu_HU) - berta [medium]",
+      "model_path": "hu/hu_HU/berta/medium",
+      "approx_size_bytes": 63206255,
+      "card": "hu/hu_HU/berta/medium/MODEL_CARD"
+    },
+    {
+      "id": "hu_HU-imre-medium",
+      "language": "hu",
+      "label": "Hungarian (hu_HU) - imre [medium]",
+      "model_path": "hu/hu_HU/imre/medium",
+      "approx_size_bytes": 63206313,
+      "card": "hu/hu_HU/imre/medium/MODEL_CARD"
+    },
+    {
+      "id": "hy_AM-gor-medium",
+      "language": "hy",
+      "label": "Armenian (hy_AM) - gor [medium]",
+      "model_path": "hy/hy_AM/gor/medium",
+      "approx_size_bytes": 63516005,
+      "card": "hy/hy_AM/gor/medium/MODEL_CARD"
+    },
+    {
+      "id": "id_ID-news_tts-medium",
+      "language": "id",
+      "label": "Indonesian (id_ID) - news_tts [medium]",
+      "model_path": "id/id_ID/news_tts/medium",
+      "approx_size_bytes": 62955094,
+      "card": "id/id_ID/news_tts/medium/MODEL_CARD"
+    },
+    {
+      "id": "is_IS-bui-medium",
+      "language": "is",
+      "label": "Icelandic (is_IS) - bui [medium]",
+      "model_path": "is/is_IS/bui/medium",
+      "approx_size_bytes": 76499627,
+      "card": "is/is_IS/bui/medium/MODEL_CARD"
+    },
+    {
+      "id": "is_IS-salka-medium",
+      "language": "is",
+      "label": "Icelandic (is_IS) - salka [medium]",
+      "model_path": "is/is_IS/salka/medium",
+      "approx_size_bytes": 76499629,
+      "card": "is/is_IS/salka/medium/MODEL_CARD"
+    },
+    {
+      "id": "is_IS-steinn-medium",
+      "language": "is",
+      "label": "Icelandic (is_IS) - steinn [medium]",
+      "model_path": "is/is_IS/steinn/medium",
+      "approx_size_bytes": 76499630,
+      "card": "is/is_IS/steinn/medium/MODEL_CARD"
+    },
+    {
+      "id": "is_IS-ugla-medium",
+      "language": "is",
+      "label": "Icelandic (is_IS) - ugla [medium]",
+      "model_path": "is/is_IS/ugla/medium",
+      "approx_size_bytes": 76499628,
+      "card": "is/is_IS/ugla/medium/MODEL_CARD"
+    },
+    {
+      "id": "it_IT-paola-medium",
+      "language": "it",
+      "label": "Italian (it_IT) - paola [medium]",
+      "model_path": "it/it_IT/paola/medium",
+      "approx_size_bytes": 63518137,
+      "card": "it/it_IT/paola/medium/MODEL_CARD"
+    },
+    {
+      "id": "it_IT-riccardo-x_low",
+      "language": "it",
+      "label": "Italian (it_IT) - riccardo [x_low]",
+      "model_path": "it/it_IT/riccardo/x_low",
+      "approx_size_bytes": 28134952,
+      "card": "it/it_IT/riccardo/x_low/MODEL_CARD"
+    },
+    {
+      "id": "it_IT-serena-high",
+      "language": "it",
+      "label": "Italian (it_IT) - serena [high]",
+      "model_path": "it/it_IT/serena/high",
+      "approx_size_bytes": 114209276,
+      "card": "it/it_IT/serena/high/MODEL_CARD"
+    },
+    {
+      "id": "it_IT-serena-medium",
+      "language": "it",
+      "label": "Italian (it_IT) - serena [medium]",
+      "model_path": "it/it_IT/serena/medium",
+      "approx_size_bytes": 63521305,
+      "card": "it/it_IT/serena/medium/MODEL_CARD"
+    },
+    {
+      "id": "ja_JP-hi_fi_captain-medium",
+      "language": "ja",
+      "label": "Japanese (ja_JP) - hi_fi_captain [medium]",
+      "model_path": "ja/ja_JP/hi_fi_captain/medium",
+      "approx_size_bytes": 76759142,
+      "card": "ja/ja_JP/hi_fi_captain/medium/MODEL_CARD"
+    },
+    {
+      "id": "ka_GE-natia-medium",
+      "language": "ka",
+      "label": "Georgian (ka_GE) - natia [medium]",
+      "model_path": "ka/ka_GE/natia/medium",
+      "approx_size_bytes": 63206136,
+      "card": "ka/ka_GE/natia/medium/MODEL_CARD"
+    },
+    {
+      "id": "kk_KZ-iseke-x_low",
+      "language": "kk",
+      "label": "Kazakh (kk_KZ) - iseke [x_low]",
+      "model_path": "kk/kk_KZ/iseke/x_low",
+      "approx_size_bytes": 28134959,
+      "card": "kk/kk_KZ/iseke/x_low/MODEL_CARD"
+    },
+    {
+      "id": "kk_KZ-issai-high",
+      "language": "kk",
+      "label": "Kazakh (kk_KZ) - issai [high]",
+      "model_path": "kk/kk_KZ/issai/high",
+      "approx_size_bytes": 127868616,
+      "card": "kk/kk_KZ/issai/high/MODEL_CARD"
+    },
+    {
+      "id": "kk_KZ-raya-x_low",
+      "language": "kk",
+      "label": "Kazakh (kk_KZ) - raya [x_low]",
+      "model_path": "kk/kk_KZ/raya/x_low",
+      "approx_size_bytes": 28134958,
+      "card": "kk/kk_KZ/raya/x_low/MODEL_CARD"
+    },
+    {
+      "id": "ko_KR-kss-medium",
+      "language": "ko",
+      "label": "Korean (ko_KR) - kss [medium]",
+      "model_path": "ko/ko_KR/kss/medium",
+      "approx_size_bytes": 63227216,
+      "card": "ko/ko_KR/kss/medium/MODEL_CARD"
+    },
+    {
+      "id": "ku_TR-berfin_renas-medium",
+      "language": "ku",
+      "label": "Kurmanji Kurdish (ku_TR) - berfin_renas [medium]",
+      "model_path": "ku/ku_TR/berfin_renas/medium",
+      "approx_size_bytes": 77065438,
+      "card": "ku/ku_TR/berfin_renas/medium/MODEL_CARD"
+    },
+    {
+      "id": "lb_LU-marylux-medium",
+      "language": "lb",
+      "label": "Luxembourgish (lb_LU) - marylux [medium]",
+      "model_path": "lb/lb_LU/marylux/medium",
+      "approx_size_bytes": 63206273,
+      "card": "lb/lb_LU/marylux/medium/MODEL_CARD"
+    },
+    {
+      "id": "lt_LT-reginute1-medium",
+      "language": "lt",
+      "label": "Lithuanian (lt_LT) - reginute1 [medium]",
+      "model_path": "lt/lt_LT/reginute1/medium",
+      "approx_size_bytes": 63521325,
+      "card": "lt/lt_LT/reginute1/medium/MODEL_CARD"
+    },
+    {
+      "id": "lv_LV-aivars-medium",
+      "language": "lv",
+      "label": "Latvian (lv_LV) - aivars [medium]",
+      "model_path": "lv/lv_LV/aivars/medium",
+      "approx_size_bytes": 63518280,
+      "card": "lv/lv_LV/aivars/medium/MODEL_CARD"
+    },
+    {
+      "id": "ml_IN-arjun-medium",
+      "language": "ml",
+      "label": "Malayalam (ml_IN) - arjun [medium]",
+      "model_path": "ml/ml_IN/arjun/medium",
+      "approx_size_bytes": 62955088,
+      "card": "ml/ml_IN/arjun/medium/MODEL_CARD"
+    },
+    {
+      "id": "ml_IN-meera-medium",
+      "language": "ml",
+      "label": "Malayalam (ml_IN) - meera [medium]",
+      "model_path": "ml/ml_IN/meera/medium",
+      "approx_size_bytes": 62955089,
+      "card": "ml/ml_IN/meera/medium/MODEL_CARD"
+    },
+    {
+      "id": "mr_IN-google-medium",
+      "language": "mr",
+      "label": "Marathi (mr_IN) - google [medium]",
+      "model_path": "mr/mr_IN/google/medium",
+      "approx_size_bytes": 76773646,
+      "card": "mr/mr_IN/google/medium/MODEL_CARD"
+    },
+    {
+      "id": "ne_NP-chitwan-medium",
+      "language": "ne",
+      "label": "Nepali (ne_NP) - chitwan [medium]",
+      "model_path": "ne/ne_NP/chitwan/medium",
+      "approx_size_bytes": 62955087,
+      "card": "ne/ne_NP/chitwan/medium/MODEL_CARD"
+    },
+    {
+      "id": "ne_NP-google-medium",
+      "language": "ne",
+      "label": "Nepali (ne_NP) - google [medium]",
+      "model_path": "ne/ne_NP/google/medium",
+      "approx_size_bytes": 76771550,
+      "card": "ne/ne_NP/google/medium/MODEL_CARD"
+    },
+    {
+      "id": "ne_NP-google-x_low",
+      "language": "ne",
+      "label": "Nepali (ne_NP) - google [x_low]",
+      "model_path": "ne/ne_NP/google/x_low",
+      "approx_size_bytes": 27697606,
+      "card": "ne/ne_NP/google/x_low/MODEL_CARD"
+    },
+    {
+      "id": "nl_BE-nathalie-medium",
+      "language": "nl",
+      "label": "Dutch (nl_BE) - nathalie [medium]",
+      "model_path": "nl/nl_BE/nathalie/medium",
+      "approx_size_bytes": 63206173,
+      "card": "nl/nl_BE/nathalie/medium/MODEL_CARD"
+    },
+    {
+      "id": "nl_BE-nathalie-x_low",
+      "language": "nl",
+      "label": "Dutch (nl_BE) - nathalie [x_low]",
+      "model_path": "nl/nl_BE/nathalie/x_low",
+      "approx_size_bytes": 20632976,
+      "card": "nl/nl_BE/nathalie/x_low/MODEL_CARD"
+    },
+    {
+      "id": "nl_BE-rdh-medium",
+      "language": "nl",
+      "label": "Dutch (nl_BE) - rdh [medium]",
+      "model_path": "nl/nl_BE/rdh/medium",
+      "approx_size_bytes": 63108685,
+      "card": "nl/nl_BE/rdh/medium/MODEL_CARD"
+    },
+    {
+      "id": "nl_BE-rdh-x_low",
+      "language": "nl",
+      "label": "Dutch (nl_BE) - rdh [x_low]",
+      "model_path": "nl/nl_BE/rdh/x_low",
+      "approx_size_bytes": 20632971,
+      "card": "nl/nl_BE/rdh/x_low/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-alex-medium",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - alex [medium]",
+      "model_path": "nl/nl_NL/alex/medium",
+      "approx_size_bytes": 63536441,
+      "card": "nl/nl_NL/alex/medium/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-mls-medium",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - mls [medium]",
+      "model_path": "nl/nl_NL/mls/medium",
+      "approx_size_bytes": 76590102,
+      "card": "nl/nl_NL/mls/medium/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-mls_5809-low",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - mls_5809 [low]",
+      "model_path": "nl/nl_NL/mls_5809/low",
+      "approx_size_bytes": 63108691,
+      "card": "nl/nl_NL/mls_5809/low/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-mls_7432-low",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - mls_7432 [low]",
+      "model_path": "nl/nl_NL/mls_7432/low",
+      "approx_size_bytes": 63108691,
+      "card": "nl/nl_NL/mls_7432/low/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-pim-medium",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - pim [medium]",
+      "model_path": "nl/nl_NL/pim/medium",
+      "approx_size_bytes": 63521087,
+      "card": "nl/nl_NL/pim/medium/MODEL_CARD"
+    },
+    {
+      "id": "nl_NL-ronnie-medium",
+      "language": "nl",
+      "label": "Dutch (nl_NL) - ronnie [medium]",
+      "model_path": "nl/nl_NL/ronnie/medium",
+      "approx_size_bytes": 62955084,
+      "card": "nl/nl_NL/ronnie/medium/MODEL_CARD"
+    },
+    {
+      "id": "no_NO-nvcc-medium",
+      "language": "no",
+      "label": "Norwegian (no_NO) - nvcc [medium]",
+      "model_path": "no/no_NO/nvcc/medium",
+      "approx_size_bytes": 76775624,
+      "card": "no/no_NO/nvcc/medium/MODEL_CARD"
+    },
+    {
+      "id": "no_NO-talesyntese-medium",
+      "language": "no",
+      "label": "Norwegian (no_NO) - talesyntese [medium]",
+      "model_path": "no/no_NO/talesyntese/medium",
+      "approx_size_bytes": 63206174,
+      "card": "no/no_NO/talesyntese/medium/MODEL_CARD"
+    },
+    {
+      "id": "pl_PL-bass-high",
+      "language": "pl",
+      "label": "Polish (pl_PL) - bass [high]",
+      "model_path": "pl/pl_PL/bass/high",
+      "approx_size_bytes": 114208978,
+      "card": "pl/pl_PL/bass/high/MODEL_CARD"
+    },
+    {
+      "id": "pl_PL-darkman-medium",
+      "language": "pl",
+      "label": "Polish (pl_PL) - darkman [medium]",
+      "model_path": "pl/pl_PL/darkman/medium",
+      "approx_size_bytes": 63206110,
+      "card": "pl/pl_PL/darkman/medium/MODEL_CARD"
+    },
+    {
+      "id": "pl_PL-gosia-medium",
+      "language": "pl",
+      "label": "Polish (pl_PL) - gosia [medium]",
+      "model_path": "pl/pl_PL/gosia/medium",
+      "approx_size_bytes": 63206108,
+      "card": "pl/pl_PL/gosia/medium/MODEL_CARD"
+    },
+    {
+      "id": "pl_PL-mc_speech-medium",
+      "language": "pl",
+      "label": "Polish (pl_PL) - mc_speech [medium]",
+      "model_path": "pl/pl_PL/mc_speech/medium",
+      "approx_size_bytes": 63206255,
+      "card": "pl/pl_PL/mc_speech/medium/MODEL_CARD"
+    },
+    {
+      "id": "pl_PL-mls_6892-low",
+      "language": "pl",
+      "label": "Polish (pl_PL) - mls_6892 [low]",
+      "model_path": "pl/pl_PL/mls_6892/low",
+      "approx_size_bytes": 63108683,
+      "card": "pl/pl_PL/mls_6892/low/MODEL_CARD"
+    },
+    {
+      "id": "pt_BR-cadu-medium",
+      "language": "pt",
+      "label": "Portuguese (pt_BR) - cadu [medium]",
+      "model_path": "pt/pt_BR/cadu/medium",
+      "approx_size_bytes": 62955084,
+      "card": "pt/pt_BR/cadu/medium/MODEL_CARD"
+    },
+    {
+      "id": "pt_BR-edresson-low",
+      "language": "pt",
+      "label": "Portuguese (pt_BR) - edresson [low]",
+      "model_path": "pt/pt_BR/edresson/low",
+      "approx_size_bytes": 63108694,
+      "card": "pt/pt_BR/edresson/low/MODEL_CARD"
+    },
+    {
+      "id": "pt_BR-faber-medium",
+      "language": "pt",
+      "label": "Portuguese (pt_BR) - faber [medium]",
+      "model_path": "pt/pt_BR/faber/medium",
+      "approx_size_bytes": 63206149,
+      "card": "pt/pt_BR/faber/medium/MODEL_CARD"
+    },
+    {
+      "id": "pt_BR-jeff-medium",
+      "language": "pt",
+      "label": "Portuguese (pt_BR) - jeff [medium]",
+      "model_path": "pt/pt_BR/jeff/medium",
+      "approx_size_bytes": 62955085,
+      "card": "pt/pt_BR/jeff/medium/MODEL_CARD"
+    },
+    {
+      "id": "pt_PT-tugão-medium",
+      "language": "pt",
+      "label": "Portuguese (pt_PT) - tugão [medium]",
+      "model_path": "pt/pt_PT/tugão/medium",
+      "approx_size_bytes": 63206320,
+      "card": "pt/pt_PT/tugão/medium/MODEL_CARD"
+    },
+    {
+      "id": "ro_RO-mihai-medium",
+      "language": "ro",
+      "label": "Romanian (ro_RO) - mihai [medium]",
+      "model_path": "ro/ro_RO/mihai/medium",
+      "approx_size_bytes": 63206171,
+      "card": "ro/ro_RO/mihai/medium/MODEL_CARD"
+    },
+    {
+      "id": "ru_RU-denis-medium",
+      "language": "ru",
+      "label": "Russian (ru_RU) - denis [medium]",
+      "model_path": "ru/ru_RU/denis/medium",
+      "approx_size_bytes": 63206117,
+      "card": "ru/ru_RU/denis/medium/MODEL_CARD"
+    },
+    {
+      "id": "ru_RU-dmitri-medium",
+      "language": "ru",
+      "label": "Russian (ru_RU) - dmitri [medium]",
+      "model_path": "ru/ru_RU/dmitri/medium",
+      "approx_size_bytes": 63206118,
+      "card": "ru/ru_RU/dmitri/medium/MODEL_CARD"
+    },
+    {
+      "id": "ru_RU-irina-medium",
+      "language": "ru",
+      "label": "Russian (ru_RU) - irina [medium]",
+      "model_path": "ru/ru_RU/irina/medium",
+      "approx_size_bytes": 63206059,
+      "card": "ru/ru_RU/irina/medium/MODEL_CARD"
+    },
+    {
+      "id": "ru_RU-ruslan-medium",
+      "language": "ru",
+      "label": "Russian (ru_RU) - ruslan [medium]",
+      "model_path": "ru/ru_RU/ruslan/medium",
+      "approx_size_bytes": 63206176,
+      "card": "ru/ru_RU/ruslan/medium/MODEL_CARD"
+    },
+    {
+      "id": "sk_SK-lili-medium",
+      "language": "sk",
+      "label": "Slovak (sk_SK) - lili [medium]",
+      "model_path": "sk/sk_SK/lili/medium",
+      "approx_size_bytes": 63206257,
+      "card": "sk/sk_SK/lili/medium/MODEL_CARD"
+    },
+    {
+      "id": "sl_SI-artur-medium",
+      "language": "sl",
+      "label": "Slovenian (sl_SI) - artur [medium]",
+      "model_path": "sl/sl_SI/artur/medium",
+      "approx_size_bytes": 63205462,
+      "card": "sl/sl_SI/artur/medium/MODEL_CARD"
+    },
+    {
+      "id": "sq_AL-edon-medium",
+      "language": "sq",
+      "label": "Albanian (sq_AL) - edon [medium]",
+      "model_path": "sq/sq_AL/edon/medium",
+      "approx_size_bytes": 63515999,
+      "card": "sq/sq_AL/edon/medium/MODEL_CARD"
+    },
+    {
+      "id": "sr_RS-serbski_institut-medium",
+      "language": "sr",
+      "label": "Serbian (sr_RS) - serbski_institut [medium]",
+      "model_path": "sr/sr_RS/serbski_institut/medium",
+      "approx_size_bytes": 76738614,
+      "card": "sr/sr_RS/serbski_institut/medium/MODEL_CARD"
+    },
+    {
+      "id": "sv_SE-alma-medium",
+      "language": "sv",
+      "label": "Swedish (sv_SE) - alma [medium]",
+      "model_path": "sv/sv_SE/alma/medium",
+      "approx_size_bytes": 63440670,
+      "card": "sv/sv_SE/alma/medium/MODEL_CARD"
+    },
+    {
+      "id": "sv_SE-lisa-medium",
+      "language": "sv",
+      "label": "Swedish (sv_SE) - lisa [medium]",
+      "model_path": "sv/sv_SE/lisa/medium",
+      "approx_size_bytes": 63518277,
+      "card": "sv/sv_SE/lisa/medium/MODEL_CARD"
+    },
+    {
+      "id": "sv_SE-nst-medium",
+      "language": "sv",
+      "label": "Swedish (sv_SE) - nst [medium]",
+      "model_path": "sv/sv_SE/nst/medium",
+      "approx_size_bytes": 63108683,
+      "card": "sv/sv_SE/nst/medium/MODEL_CARD"
+    },
+    {
+      "id": "sw_CD-lanfrica-medium",
+      "language": "sw",
+      "label": "Swahili (sw_CD) - lanfrica [medium]",
+      "model_path": "sw/sw_CD/lanfrica/medium",
+      "approx_size_bytes": 63206199,
+      "card": "sw/sw_CD/lanfrica/medium/MODEL_CARD"
+    },
+    {
+      "id": "te_IN-maya-medium",
+      "language": "te",
+      "label": "Telugu (te_IN) - maya [medium]",
+      "model_path": "te/te_IN/maya/medium",
+      "approx_size_bytes": 62955084,
+      "card": "te/te_IN/maya/medium/MODEL_CARD"
+    },
+    {
+      "id": "te_IN-padmavathi-medium",
+      "language": "te",
+      "label": "Telugu (te_IN) - padmavathi [medium]",
+      "model_path": "te/te_IN/padmavathi/medium",
+      "approx_size_bytes": 63521024,
+      "card": "te/te_IN/padmavathi/medium/MODEL_CARD"
+    },
+    {
+      "id": "te_IN-venkatesh-medium",
+      "language": "te",
+      "label": "Telugu (te_IN) - venkatesh [medium]",
+      "model_path": "te/te_IN/venkatesh/medium",
+      "approx_size_bytes": 63521023,
+      "card": "te/te_IN/venkatesh/medium/MODEL_CARD"
+    },
+    {
+      "id": "th_TH-tsync2-medium",
+      "language": "th",
+      "label": "Thai (th_TH) - tsync2 [medium]",
+      "model_path": "th/th_TH/tsync2/medium",
+      "approx_size_bytes": 63227239,
+      "card": "th/th_TH/tsync2/medium/MODEL_CARD"
+    },
+    {
+      "id": "tr_TR-dfki-medium",
+      "language": "tr",
+      "label": "Turkish (tr_TR) - dfki [medium]",
+      "model_path": "tr/tr_TR/dfki/medium",
+      "approx_size_bytes": 63206254,
+      "card": "tr/tr_TR/dfki/medium/MODEL_CARD"
+    },
+    {
+      "id": "uk_UA-lada-x_low",
+      "language": "uk",
+      "label": "Ukrainian (uk_UA) - lada [x_low]",
+      "model_path": "uk/uk_UA/lada/x_low",
+      "approx_size_bytes": 20632999,
+      "card": "uk/uk_UA/lada/x_low/MODEL_CARD"
+    },
+    {
+      "id": "uk_UA-mykyta-high",
+      "language": "uk",
+      "label": "Ukrainian (uk_UA) - mykyta [high]",
+      "model_path": "uk/uk_UA/mykyta/high",
+      "approx_size_bytes": 114208928,
+      "card": "uk/uk_UA/mykyta/high/MODEL_CARD"
+    },
+    {
+      "id": "uk_UA-oleksa-high",
+      "language": "uk",
+      "label": "Ukrainian (uk_UA) - oleksa [high]",
+      "model_path": "uk/uk_UA/oleksa/high",
+      "approx_size_bytes": 114208928,
+      "card": "uk/uk_UA/oleksa/high/MODEL_CARD"
+    },
+    {
+      "id": "uk_UA-tetiana-high",
+      "language": "uk",
+      "label": "Ukrainian (uk_UA) - tetiana [high]",
+      "model_path": "uk/uk_UA/tetiana/high",
+      "approx_size_bytes": 114208929,
+      "card": "uk/uk_UA/tetiana/high/MODEL_CARD"
+    },
+    {
+      "id": "uk_UA-ukrainian_tts-medium",
+      "language": "uk",
+      "label": "Ukrainian (uk_UA) - ukrainian_tts [medium]",
+      "model_path": "uk/uk_UA/ukrainian_tts/medium",
+      "approx_size_bytes": 76737665,
+      "card": "uk/uk_UA/ukrainian_tts/medium/MODEL_CARD"
+    },
+    {
+      "id": "ur_PK-aegis_female-medium",
+      "language": "ur",
+      "label": "Urdu (ur_PK) - aegis_female [medium]",
+      "model_path": "ur/ur_PK/aegis_female/medium",
+      "approx_size_bytes": 63520825,
+      "card": "ur/ur_PK/aegis_female/medium/MODEL_CARD"
+    },
+    {
+      "id": "ur_PK-fasih-medium",
+      "language": "ur",
+      "label": "Urdu (ur_PK) - fasih [medium]",
+      "model_path": "ur/ur_PK/fasih/medium",
+      "approx_size_bytes": 63535161,
+      "card": "ur/ur_PK/fasih/medium/MODEL_CARD"
+    },
+    {
+      "id": "vi_VN-25hours_single-low",
+      "language": "vi",
+      "label": "Vietnamese (vi_VN) - 25hours_single [low]",
+      "model_path": "vi/vi_VN/25hours_single/low",
+      "approx_size_bytes": 63108702,
+      "card": "vi/vi_VN/25hours_single/low/MODEL_CARD"
+    },
+    {
+      "id": "vi_VN-vais1000-medium",
+      "language": "vi",
+      "label": "Vietnamese (vi_VN) - vais1000 [medium]",
+      "model_path": "vi/vi_VN/vais1000/medium",
+      "approx_size_bytes": 63206154,
+      "card": "vi/vi_VN/vais1000/medium/MODEL_CARD"
+    },
+    {
+      "id": "vi_VN-vivos-x_low",
+      "language": "vi",
+      "label": "Vietnamese (vi_VN) - vivos [x_low]",
+      "model_path": "vi/vi_VN/vivos/x_low",
+      "approx_size_bytes": 27795005,
+      "card": "vi/vi_VN/vivos/x_low/MODEL_CARD"
+    },
+    {
+      "id": "zh_CN-chaowen-medium",
+      "language": "zh",
+      "label": "Chinese (zh_CN) - chaowen [medium]",
+      "model_path": "zh/zh_CN/chaowen/medium",
+      "approx_size_bytes": 63224911,
+      "card": "zh/zh_CN/chaowen/medium/MODEL_CARD"
+    },
+    {
+      "id": "zh_CN-huayan-medium",
+      "language": "zh",
+      "label": "Chinese (zh_CN) - huayan [medium]",
+      "model_path": "zh/zh_CN/huayan/medium",
+      "approx_size_bytes": 63206116,
+      "card": "zh/zh_CN/huayan/medium/MODEL_CARD"
+    },
+    {
+      "id": "zh_CN-huayan-x_low",
+      "language": "zh",
+      "label": "Chinese (zh_CN) - huayan [x_low]",
+      "model_path": "zh/zh_CN/huayan/x_low",
+      "approx_size_bytes": 20632977,
+      "card": "zh/zh_CN/huayan/x_low/MODEL_CARD"
+    },
+    {
+      "id": "zh_CN-xiao_ya-medium",
+      "language": "zh",
+      "label": "Chinese (zh_CN) - xiao_ya [medium]",
+      "model_path": "zh/zh_CN/xiao_ya/medium",
+      "approx_size_bytes": 63224911,
+      "card": "zh/zh_CN/xiao_ya/medium/MODEL_CARD"
+    }
+  ]
+}

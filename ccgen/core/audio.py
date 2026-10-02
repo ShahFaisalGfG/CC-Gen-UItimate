@@ -1,92 +1,35 @@
-# audio.py - audio extraction from video/audio files via ffmpeg-python
+# audio.py - decode the audio track of any video or audio file into mono samples
+#
+# Decoding runs in-process through PyAV (the FFmpeg libraries bundled with faster-whisper),
+# so the app needs no separate ffmpeg install, no subprocess, and no temporary WAV file.
 
 import os
-import shutil
-import subprocess
-import tempfile
-from typing import Optional
+from typing import cast
 
-import ffmpeg
+import numpy as np
+from av import FFmpegError
+from faster_whisper.audio import decode_audio
 
 from ccgen.config.defaults import AudioDefaults
 
 
-def extract_audio(input_path: str, output_path: Optional[str] = None) -> str:
-    """Extract a 16 kHz mono WAV from any video/audio file. Returns output path.
+def load_audio(input_path: str, sample_rate: int = AudioDefaults.SAMPLE_RATE) -> np.ndarray:
+    """Return the file's audio as mono float32 samples at `sample_rate` (16 kHz for Whisper).
 
-    Creates a temporary file when output_path is None; caller must delete it via cleanup_temp().
+    Raises FileNotFoundError for a missing file and RuntimeError with a readable message when
+    the file has no audio track or is not a media file.
     """
+    if not os.path.isfile(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    name = os.path.basename(input_path)
     try:
-        _validate_input(input_path)
-        _check_ffmpeg()
-        wav_path = output_path or _make_temp_wav()
-        _run_ffmpeg(input_path, wav_path)
-        return wav_path
-    except (FileNotFoundError, RuntimeError):
-        raise
-    except Exception as e:
-        raise RuntimeError(f"Audio extraction failed: {e}") from e
-
-
-def cleanup_temp(path: str) -> None:
-    """Delete a temporary audio file, silently ignoring any errors."""
-    try:
-        if os.path.exists(path):
-            os.remove(path)
-    except Exception:
-        pass
-
-
-def _validate_input(path: str) -> None:
-    """Raise FileNotFoundError when the input path does not exist."""
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"Input file not found: {path}")
-
-
-def _check_ffmpeg() -> None:
-    """Raise RuntimeError when ffmpeg binary is not available on PATH."""
-    if shutil.which("ffmpeg") is None:
-        raise RuntimeError(
-            "ffmpeg not found on PATH. "
-            "It should have been installed by the CC-Gen-Ultimate installer."
-        )
-
-
-def _make_temp_wav() -> str:
-    """Create and return the path to a new temporary WAV file."""
-    try:
-        fd, path = tempfile.mkstemp(suffix=".wav", prefix="ccgen_audio_")
-        os.close(fd)
-        return path
-    except Exception as e:
-        raise RuntimeError(f"Cannot create temporary file: {e}") from e
-
-
-def _run_ffmpeg(input_path: str, output_path: str) -> None:
-    """Execute ffmpeg to convert input to 16 kHz mono PCM WAV.
-
-    Runs without a visible console window; wraps a non-zero exit into RuntimeError.
-    """
-    args = (
-        ffmpeg
-        .input(input_path)
-        .output(
-            output_path,
-            ar=AudioDefaults.SAMPLE_RATE,
-            ac=AudioDefaults.CHANNELS,
-            format=AudioDefaults.AUDIO_FORMAT,
-            acodec="pcm_s16le",
-        )
-        .overwrite_output()
-        .compile()
-    )
-    try:
-        subprocess.run(
-            args,
-            capture_output=True,
-            check=True,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-    except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else str(e)
-        raise RuntimeError(f"ffmpeg error: {stderr}") from e
+        # decode_audio returns a (left, right) tuple only when split_stereo=True.
+        audio = cast(np.ndarray, decode_audio(input_path, sampling_rate=sample_rate))
+    except IndexError as e:
+        # PyAV raises IndexError when the container has no audio stream (e.g. a silent video).
+        raise RuntimeError(f"{name} has no audio track.") from e
+    except FFmpegError as e:
+        raise RuntimeError(f"{name} could not be read as audio or video ({e.strerror or e}).") from e
+    if audio.size == 0:
+        raise RuntimeError(f"{name} contains no audio.")
+    return audio

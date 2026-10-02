@@ -8,8 +8,13 @@ FileList 1.0 FileList.qml
 FormatChip 1.0 FormatChip.qml
 FormRow 1.0 FormRow.qml
 Icon 1.0 Icon.qml
+OutputSettings 1.0 OutputSettings.qml
+QueuePanel 1.0 QueuePanel.qml
 ResizeHandles 1.0 ResizeHandles.qml
+ResultsView 1.0 ResultsView.qml
+RunBar 1.0 RunBar.qml
 SegmentItem 1.0 SegmentItem.qml
 StyledComboBox 1.0 StyledComboBox.qml
 TitleBar 1.0 TitleBar.qml
 Toast 1.0 Toast.qml
+XttsTermsDialog 1.0 XttsTermsDialog.qml

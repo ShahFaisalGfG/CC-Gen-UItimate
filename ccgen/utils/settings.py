@@ -32,7 +32,8 @@ def load_settings() -> dict[str, Any]:
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 user = json.load(fh)
-            return merge_settings(get_default_settings(), user)
+            defaults = get_default_settings()
+            return merge_settings(defaults, drop_unknown_keys(user, defaults))
         except Exception:
             _log.warning("Settings file %s is unreadable; using defaults", path, exc_info=True)
     return get_default_settings()
@@ -76,6 +77,24 @@ def merge_settings(
     for key, value in overrides.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = merge_settings(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def drop_unknown_keys(settings: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    """Return `settings` without the keys the defaults no longer define.
+
+    Settings files written by older versions keep options that were since removed (such as the
+    old per-stage "enabled" switches); dropping them keeps stale values out of the UI and API.
+    """
+    result: dict[str, Any] = {}
+    for key, value in settings.items():
+        if key not in defaults:
+            continue
+        if isinstance(defaults[key], dict):
+            if isinstance(value, dict):
+                result[key] = drop_unknown_keys(value, defaults[key])
         else:
             result[key] = value
     return result

@@ -87,6 +87,11 @@ QtObject {
         mic: "",
         openExternal: "",
         sync: "",
-        chevronDown: ""
+        chevronDown: "",
+        speaker: "",
+        workflow: "",
+        arrowUp: "",
+        arrowDown: "",
+        send: ""
     })
 }

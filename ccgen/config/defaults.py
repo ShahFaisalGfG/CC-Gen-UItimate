@@ -9,7 +9,7 @@ class AppInfo:
     APP_NAME = "CC-Gen-Ultimate"
     APP_VERSION = "1.0.0"
     APP_AUTHOR = "Shah Faisal"
-    APP_DESCRIPTION = "Offline video/audio transcription and subtitle generation"
+    APP_DESCRIPTION = "Offline subtitle generation, translation, transliteration, and dubbing"
 
 
 class ModelDefaults:
@@ -56,6 +56,18 @@ class ModelRepos:
         ("roman", "ur"): "Mavkif/m2m100_rup_rur_to_ur",
     }
     REKHTA = "rekhtalabs/hi-2-ur-translit"
+    PIPER_VOICES = "rhasspy/piper-voices"
+    # Pinned so a re-uploaded checkpoint can never change voices between installs.
+    XTTS = "coqui/XTTS-v2"
+    XTTS_REVISION = "6c2b0d75eae4b7047358e3b6bd9325f857d43f77"
+    XTTS_FILES = ("config.json", "model.pth", "vocab.json")
+    XTTS_SIZE_BYTES = 1_868_294_705
+    # Kokoro's ONNX export is published as GitHub release assets: (name, size, sha256).
+    KOKORO_RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1"
+    KOKORO_FILES: tuple[tuple[str, int, str], ...] = (
+        ("kokoro-v1.0.onnx", 325_505_369, "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a"),
+        ("voices-v1.0.bin", 28_214_398, "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"),
+    )
 
 
 class ComputeDefaults:
@@ -101,7 +113,6 @@ class TranslationDefaults:
 
     DEFAULT_SOURCE_LANG = "auto"
     DEFAULT_TARGET_LANG = "en"
-    TRANSLATE_ENABLED = False
 
 
 class OutputDefaults:
@@ -112,6 +123,8 @@ class OutputDefaults:
     FORMAT_LRC = False
     FORMAT_ASS = False
     FORMAT_SBV = False
+    # Written when a request names no format at all.
+    DEFAULT_FORMAT = "srt"
     # Empty means "next to each input file".
     DIRECTORY = ""
     MAX_LINE_LENGTH = 42
@@ -129,11 +142,9 @@ class OutputDefaults:
 
 
 class AudioDefaults:
-    """ffmpeg audio extraction defaults."""
+    """Audio decoding defaults (Whisper models expect 16 kHz mono)."""
 
     SAMPLE_RATE = 16000
-    CHANNELS = 1
-    AUDIO_FORMAT = "wav"
 
 
 class LoggingDefaults:
@@ -186,8 +197,6 @@ class TransliterationDefaults:
 
     DEFAULT_SOURCE = "roman"
     DEFAULT_TARGET = "ur"
-    ENABLED = False
-    INPUT_SOURCE = "transcription"
 
     ENGINE_RULE = "rule"
     ENGINE_NEURAL = "neural"
@@ -216,6 +225,58 @@ class TransliterationDefaults:
     ]
 
 
+class DubbingDefaults:
+    """Speech synthesis defaults for dubbing."""
+
+    MODE_XTTS = "xtts"
+    MODE_KOKORO = "kokoro"
+    MODE_PIPER = "piper"
+    DEFAULT_MODE = MODE_XTTS
+    # (label, code, trade-offs shown under the mode picker)
+    MODES: list[tuple[str, str, str]] = [
+        ("Voice cloning (XTTS-v2)", MODE_XTTS,
+         "Clones each original speaker for the most natural dub. Slow without a GPU, a 1.9 GB "
+         "download, speaks every language here except Urdu, and allows non-commercial use only."),
+        ("Natural voices (Kokoro)", MODE_KOKORO,
+         "Very natural stock voices that run fast on any computer. 350 MB; English, Spanish, French, "
+         "Hindi, Japanese, Portuguese, and Chinese."),
+        ("Light voices (Piper)", MODE_PIPER,
+         "Small, fast stock voices with the widest language coverage, including Urdu. "
+         "About 60 MB per voice; sounds more synthetic."),
+    ]
+    VOICE_AUTO = "auto"
+    LANGUAGE_AUTO = "auto"
+    SPEAKERS_AUTO = "auto"
+    SPEAKERS_SINGLE = "single"
+    DEFAULT_SPEAKERS = SPEAKERS_AUTO
+    SPEAKERS: list[tuple[str, str]] = [
+        ("Detect each speaker", SPEAKERS_AUTO),
+        ("One voice for everyone", SPEAKERS_SINGLE),
+    ]
+    MAX_SPEAKERS = 6
+    # Speech may be sped up this much to fit a cue's time before it is trimmed.
+    MAX_SPEEDUP = 1.35
+    MAX_SPEEDUP_RANGE = (1.0, 2.0)
+    OUTPUT_TRACK = "track"
+    OUTPUT_WAV = "wav"
+    DEFAULT_OUTPUT = OUTPUT_TRACK
+    OUTPUTS: list[tuple[str, str]] = [
+        ("Add as a new audio track", OUTPUT_TRACK),
+        ("Separate WAV file", OUTPUT_WAV),
+    ]
+    DEFAULT_TRACK = False
+    DEVICE_AUTO = "auto"
+    DEVICE_CPU = "cpu"
+    DEVICES: list[tuple[str, str]] = [
+        ("Automatic (best device)", DEVICE_AUTO),
+        ("CPU", DEVICE_CPU),
+    ]
+    # Sample rate of the assembled dub track.
+    TRACK_RATE = 48000
+    # Languages offered for dubbing: every spoken language the app transcribes.
+    LANGUAGES: list[tuple[str, str]] = [(label, code) for label, code in LanguageOptions.TRANSCRIPTION if code]
+
+
 def get_default_settings() -> dict[str, Any]:
     """Return the complete default settings dictionary."""
     return {
@@ -231,7 +292,6 @@ def get_default_settings() -> dict[str, Any]:
             "vad_filter": TranscriptionDefaults.VAD_FILTER,
         },
         "translation": {
-            "enabled": TranslationDefaults.TRANSLATE_ENABLED,
             "source_lang": TranslationDefaults.DEFAULT_SOURCE_LANG,
             "target_lang": TranslationDefaults.DEFAULT_TARGET_LANG,
         },
@@ -250,11 +310,18 @@ def get_default_settings() -> dict[str, Any]:
             "log_level": LoggingDefaults.DEFAULT_LOG_LEVEL,
         },
         "transliteration": {
-            "enabled": TransliterationDefaults.ENABLED,
             "source": TransliterationDefaults.DEFAULT_SOURCE,
             "target": TransliterationDefaults.DEFAULT_TARGET,
-            "input_source": TransliterationDefaults.INPUT_SOURCE,
             "engine": TransliterationDefaults.DEFAULT_ENGINE,
+        },
+        "dubbing": {
+            "mode": DubbingDefaults.DEFAULT_MODE,
+            "speakers": DubbingDefaults.DEFAULT_SPEAKERS,
+            "max_speedup": DubbingDefaults.MAX_SPEEDUP,
+            "output": DubbingDefaults.DEFAULT_OUTPUT,
+            "default_track": DubbingDefaults.DEFAULT_TRACK,
+            "device": DubbingDefaults.DEVICE_AUTO,
+            "xtts_terms_accepted": False,
         },
         "ui": {
             "theme": "system",

@@ -1,47 +1,46 @@
-# job.py - request contract for starting pipeline jobs
+# job.py - request contract for starting task jobs
+#
+# A job body is any task config (see ccgen.core.tasks.configs) tagged by its "task" field. The
+# configs validate themselves, so these helpers only turn pydantic errors into plain sentences
+# the UI can show as they are.
 
-from typing import Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import ValidationError
 
-from ccgen.config.defaults import (
-    ComputeDefaults,
-    ModelDefaults,
-    OutputDefaults,
-    TranscriptionDefaults,
-    TranslationDefaults,
-    TransliterationDefaults,
-)
+from ccgen.core.tasks import TASK_CONFIG
+from ccgen.core.tasks.configs import TaskConfigBase
+
+_VALUE_ERROR_PREFIX = "Value error, "
 
 
-class JobConfig(BaseModel):
-    """Request body to start a transcription/translation/transliteration job."""
+def parse_task_config(body: dict[str, Any]) -> TaskConfigBase:
+    """Validate a job body into its task config. Raises ValueError with readable messages."""
+    try:
+        return TASK_CONFIG.validate_python(body)
+    except ValidationError as e:
+        raise ValueError(" ".join(_messages(e))) from e
 
-    input_path: str
-    output_dir: Optional[str] = None
-    model_name: str = ModelDefaults.DEFAULT_MODEL
-    device: str = ComputeDefaults.DEFAULT_DEVICE
-    compute_type: str = ComputeDefaults.DEFAULT_COMPUTE_TYPE
-    language: Optional[str] = None
-    translate: bool = TranslationDefaults.TRANSLATE_ENABLED
-    source_lang: str = TranslationDefaults.DEFAULT_SOURCE_LANG
-    target_lang: str = TranslationDefaults.DEFAULT_TARGET_LANG
-    emit_srt: bool = OutputDefaults.FORMAT_SRT
-    emit_vtt: bool = OutputDefaults.FORMAT_VTT
-    emit_lrc: bool = OutputDefaults.FORMAT_LRC
-    emit_ass: bool = OutputDefaults.FORMAT_ASS
-    emit_sbv: bool = OutputDefaults.FORMAT_SBV
-    max_line_length: int = Field(
-        OutputDefaults.MAX_LINE_LENGTH,
-        ge=OutputDefaults.MAX_LINE_LENGTH_RANGE[0], le=OutputDefaults.MAX_LINE_LENGTH_RANGE[1],
-    )
-    max_lines: int = Field(
-        OutputDefaults.MAX_LINES, ge=OutputDefaults.MAX_LINES_RANGE[0], le=OutputDefaults.MAX_LINES_RANGE[1],
-    )
-    beam_size: int = TranscriptionDefaults.BEAM_SIZE
-    vad_filter: bool = TranscriptionDefaults.VAD_FILTER
-    transliterate: bool = TransliterationDefaults.ENABLED
-    translit_source: str = TransliterationDefaults.DEFAULT_SOURCE
-    translit_target: str = TransliterationDefaults.DEFAULT_TARGET
-    translit_input: str = TransliterationDefaults.INPUT_SOURCE
-    translit_engine: str = TransliterationDefaults.DEFAULT_ENGINE
+
+def config_errors(body: dict[str, Any]) -> list[str]:
+    """Return every reason the job body can't run, or an empty list when it is valid."""
+    try:
+        TASK_CONFIG.validate_python(body)
+    except ValidationError as e:
+        return _messages(e)
+    return []
+
+
+def _messages(error: ValidationError) -> list[str]:
+    """Flatten pydantic errors into sentences, naming the field for type errors."""
+    messages: list[str] = []
+    for item in error.errors():
+        message = str(item.get("msg", ""))
+        if message.startswith(_VALUE_ERROR_PREFIX):
+            message = message[len(_VALUE_ERROR_PREFIX):]
+        else:
+            location = ".".join(str(part) for part in item.get("loc", ()) if not isinstance(part, int))
+            message = f"{location}: {message}" if location else message
+        if message not in messages:
+            messages.append(message)
+    return messages

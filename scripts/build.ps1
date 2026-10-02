@@ -7,16 +7,23 @@
     Step 3 - Shell DLL    : copies ccgen_shell.dll into dist\CC-Gen-Ultimate\
     Step 4 - Inno Setup   : compiles system and user installers into build\installer\
     Step 5 - Portable     : builds a single-file portable exe into build\
+.PARAMETER Gpu
+    Which GPU the build's PyTorch targets: "cuda" (NVIDIA, the default and main release) or
+    "xpu" (Intel Arc and Core Ultra; file names get an "_intel_gpu" suffix). Piper and Kokoro
+    voices use DirectML on any GPU in both builds. Installs that runtime into the venv first.
 .NOTES
     Requirements: Python venv with pyinstaller>=6.17, Inno Setup 6, Visual Studio Build Tools
 #>
+
+param(
+    [ValidateSet("cuda", "xpu")] [string]$Gpu = "cuda"
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-$Entry    = "app.py"
 $IssFiles = @(
     "installer\ccgenultimate_system_installer.iss",
     "installer\ccgenultimate_user_installer.iss"
@@ -47,6 +54,7 @@ function Invoke-Iscc([string]$IssPath) {
         "/DMyAppVersion=$($Meta.Version)" `
         "/DMyAppPublisher=$($Meta.Publisher)" `
         "/DMyAppURL=$($Meta.Url)" `
+        "/DMyGpuSuffix=$Suffix" `
         $IssPath
     if ($LASTEXITCODE -ne 0) {
         Fail "Inno Setup failed for '$IssPath' (exit $LASTEXITCODE)."
@@ -71,10 +79,12 @@ Set-Location $ProjectRoot
 # ── App metadata ──────────────────────────────────────────────────────────────
 
 . "$ScriptDir\app_meta.ps1"
+. "$ScriptDir\bundle.ps1"
 $Meta    = Get-AppMeta
 $AppName = $Meta.AppName
 $Version = $Meta.Version
 $DistDir = "dist\$AppName"
+$Suffix  = $GpuSuffix[$Gpu]
 
 # ── Native context-menu shell extension ───────────────────────────────────────
 
@@ -122,6 +132,10 @@ if (-not $Iscc) {
     Fail "Inno Setup 6 not found. Download from: https://jrsoftware.org/isinfo.php"
 }
 
+Write-Step "Installing the $Gpu GPU runtime (PyTorch $TorchVersion and DirectML)"
+
+Install-GpuRuntime -Gpu $Gpu
+
 Write-Host "   Python      : $(python --version)"         -ForegroundColor DarkGray
 Write-Host "   PyInstaller : $(pyinstaller --version)"    -ForegroundColor DarkGray
 Write-Host "   ISCC        : $Iscc"                       -ForegroundColor DarkGray
@@ -143,24 +157,7 @@ New-Item -ItemType Directory -Path "build\installer" -Force | Out-Null
 
 Write-Step "Running PyInstaller  (this may take several minutes)"
 
-$PyArgs = @(
-    "--name",      $AppName,
-    "--windowed",
-    "--onedir",
-    "--icon",      "ccgen\assets\icons\CCGenUltimate.ico",
-    "--add-data",  "$ProjectRoot\ccgen\qml;ccgen\qml",
-    "--add-data",  "$ProjectRoot\ccgen\assets;ccgen\assets",
-    # Non-code data files these packages read via relative paths at runtime -
-    # PyInstaller only traces Python imports, so these need to be listed explicitly.
-    "--collect-data", "indic_transliteration",
-    "--collect-data", "faster_whisper",
-    "--distpath",  "dist",
-    "--workpath",  "build\pyinstaller",
-    "--specpath",  ".",
-    "--noconfirm",
-    "--clean",
-    $Entry
-)
+$PyArgs = Get-PyInstallerArgs -Name $AppName -Mode onedir -DistPath "dist"
 
 pyinstaller @PyArgs
 
@@ -175,6 +172,14 @@ if (-not (Test-Path $ExePath)) {
 
 $BundleMb = [math]::Round((Get-ChildItem $DistDir -Recurse | Measure-Object Length -Sum).Sum / 1MB, 1)
 Write-Host "   Bundle ready : $DistDir  ($BundleMb MB)" -ForegroundColor DarkGray
+
+# ── Bundle self-test ──────────────────────────────────────────────────────────
+
+Write-Step "Verifying the bundle can load every engine, library, and QML module"
+
+if (-not (Test-Bundle $ExePath)) {
+    Fail "Bundle self-test failed - a module, DLL, or data file is missing from the build. See the report above."
+}
 
 # ── Shell extension DLL ───────────────────────────────────────────────────────
 
@@ -202,7 +207,7 @@ foreach ($iss in $IssFiles) {
 
 Write-Step "Building portable executable"
 
-$PortableName = "${AppName}_${Version}_portable"
+$PortableName = "${AppName}_${Version}${Suffix}_portable"
 $PortableExe  = "build\${PortableName}.exe"
 
 foreach ($path in @("${PortableName}.spec", $PortableExe)) {
@@ -212,24 +217,7 @@ foreach ($path in @("${PortableName}.spec", $PortableExe)) {
     }
 }
 
-$PortableArgs = @(
-    "--name",      $PortableName,
-    "--windowed",
-    "--onefile",
-    "--icon",      "ccgen\assets\icons\CCGenUltimate.ico",
-    "--add-data",  "$ProjectRoot\ccgen\qml;ccgen\qml",
-    "--add-data",  "$ProjectRoot\ccgen\assets;ccgen\assets",
-    # Non-code data files these packages read via relative paths at runtime -
-    # PyInstaller only traces Python imports, so these need to be listed explicitly.
-    "--collect-data", "indic_transliteration",
-    "--collect-data", "faster_whisper",
-    "--distpath",  "build",
-    "--workpath",  "build\pyinstaller",
-    "--specpath",  ".",
-    "--noconfirm",
-    "--clean",
-    $Entry
-)
+$PortableArgs = Get-PyInstallerArgs -Name $PortableName -Mode onefile -DistPath "build"
 
 $PortableStart = Get-Date
 pyinstaller @PortableArgs
@@ -240,13 +228,16 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path $PortableExe)) {
     Fail "Expected portable executable not found: $PortableExe"
 }
+if (-not (Test-Bundle $PortableExe)) {
+    Fail "Portable self-test failed - a module, DLL, or data file is missing from the build. See the report above."
+}
 $PortableElapsed = (Get-Date) - $PortableStart
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 $Outputs = @(
-    "build\installer\${AppName}_${Version}_system_installer.exe",
-    "build\installer\${AppName}_${Version}_user_installer.exe"
+    "build\installer\${AppName}_${Version}${Suffix}_system_installer.exe",
+    "build\installer\${AppName}_${Version}${Suffix}_user_installer.exe"
 )
 
 Write-Host ""

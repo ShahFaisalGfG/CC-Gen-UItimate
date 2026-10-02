@@ -1,13 +1,22 @@
 faster-whisper>=1.0.3
+av>=11
 argostranslate>=1.9.6
-ffmpeg-python>=0.2.0
 PySide6>=6.7.0
 indic-transliteration>=2.3
 fastapi>=0.115
 uvicorn[standard]>=0.32
 transformers>=4.44
-torch>=2.2
+# coqui-tts refuses to import on torch 2.9+ without torchcodec and FFmpeg DLLs it never uses for
+# inference, and torchaudio stops at 2.11; 2.8 is the newest pair XTTS runs on cleanly. The build
+# scripts install the CUDA or XPU build of this same version (see scripts/bundle.ps1).
+torch>=2.2,<2.9
+torchaudio>=2.2,<2.9
 sentencepiece>=0.2.0
 huggingface_hub>=0.24
+# Dubbing: XTTS-v2 voice cloning (with its Japanese, Chinese, and Korean text support),
+# Kokoro and Piper stock voices.
+coqui-tts[ja,zh,ko]>=0.27.5,<0.28
+kokoro-onnx>=0.4.9
+piper-tts>=1.3
 pytest>=8.0
 pyright>=1.1

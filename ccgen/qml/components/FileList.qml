@@ -1,4 +1,3 @@
-// qmllint disable unqualified
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -14,14 +13,23 @@ FocusScope {
     id: root
 
     required property var fileModel
-    property bool busy: false
     property bool scanning: false
     property int scanFound: 0
+    // What the empty queue explains, one step per line, for this tab.
+    property var firstRunSteps: []
+    // Tabs a finished file's outputs can be handed to: [{ key, label }].
+    property var sendTargets: []
+    // True on the Dub tab, where a media row can be paired with the subtitle it speaks.
+    property bool allowCompanion: false
 
     signal addFilesRequested()
     signal addFolderRequested()
     signal filesDropped(var urls)
     signal revealRequested(string path)
+    signal stopScanRequested()
+    signal clearRequested()
+    signal sendRequested(string target, string path, var outputs)
+    signal companionRequested(int row)
 
     property int _anchor: -1
 
@@ -46,7 +54,7 @@ FocusScope {
         if (!item || !item.selected)
             root._click(index, Qt.NoModifier)
         contextMenu.row = index
-        contextMenu.path = root.fileModel.getPaths()[index] || ""
+        contextMenu.info = root.fileModel.rowAt(index)
         contextMenu.popup()
     }
 
@@ -91,14 +99,35 @@ FocusScope {
                 kind: "primary"
                 text: "Add files"
                 iconName: "add"
-                toolTipText: "Ctrl+O"
+                toolTipText: "Choose video, audio, or subtitle files (Ctrl+O)"
                 onClicked: root.addFilesRequested()
             }
             AppButton {
                 text: "Add folder"
                 iconName: "folder"
-                toolTipText: "Ctrl+Shift+O"
+                toolTipText: "Add every supported file in a folder and its subfolders (Ctrl+Shift+O)"
                 onClicked: root.addFolderRequested()
+            }
+        }
+
+        // How a first run works, so nobody has to guess what comes after adding files.
+        Column {
+            id: firstRunSteps
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spaceSm
+            spacing: Theme.spaceXs
+            Repeater {
+                model: root.firstRunSteps
+                delegate: Text {
+                    required property int index
+                    required property string modelData
+                    width: firstRunSteps.width
+                    text: (index + 1) + ".  " + modelData
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    color: Theme.textMuted
+                }
             }
         }
     }
@@ -143,7 +172,7 @@ FocusScope {
                     compact: true
                     text: "Stop"
                     toolTipText: "Stop scanning; files found so far stay in the queue"
-                    onClicked: transcriptionController.cancelScan()
+                    onClicked: root.stopScanRequested()
                 }
             }
         }
@@ -223,12 +252,36 @@ FocusScope {
     Menu {
         id: contextMenu
         property int row: -1
-        property string path: ""
+        property var info: ({})
+        readonly property var outputs: contextMenu.info.outputs || []
 
         MenuItem {
             text: "Show in folder"
-            enabled: contextMenu.path.length > 0
-            onTriggered: root.revealRequested(contextMenu.path)
+            enabled: (contextMenu.info.path || "").length > 0
+            onTriggered: root.revealRequested(contextMenu.info.path)
+        }
+        MenuItem {
+            text: "Show the result"
+            enabled: contextMenu.outputs.length > 0
+            onTriggered: root.revealRequested(contextMenu.outputs[0])
+        }
+        Menu {
+            title: "Send the result to"
+            enabled: contextMenu.outputs.length > 0 && root.sendTargets.length > 0
+            Repeater {
+                model: root.sendTargets
+                delegate: MenuItem {
+                    required property var modelData
+                    text: modelData.label
+                    onTriggered: root.sendRequested(modelData.key, contextMenu.info.path, contextMenu.outputs)
+                }
+            }
+        }
+        MenuItem {
+            text: "Choose subtitle to speak..."
+            visible: root.allowCompanion && contextMenu.info.kind !== "subtitle"
+            height: visible ? implicitHeight : 0
+            onTriggered: root.companionRequested(contextMenu.row)
         }
         MenuSeparator {}
         MenuItem {
@@ -242,7 +295,7 @@ FocusScope {
         }
         MenuItem {
             text: "Clear queue"
-            onTriggered: transcriptionController.clearQueue()
+            onTriggered: root.clearRequested()
         }
     }
 

@@ -2,6 +2,7 @@
 # blocking download/delete actions the "Manage Models" screen drives through asset_manager.py
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional, TypedDict
 
@@ -9,9 +10,12 @@ import argostranslate.package
 from faster_whisper import WhisperModel
 from huggingface_hub import scan_cache_dir
 
+from ccgen.config.capabilities import PIVOT_LANGUAGE as _PIVOT_LANG
 from ccgen.config.defaults import LanguageOptions, ModelDefaults, ModelRepos
+from ccgen.config.voices import ENGINE_KOKORO, ENGINE_PIPER, ENGINE_XTTS, VOICES, VoiceOption, voice_by_key
 from ccgen.engines.transliteration.neural_engine import NeuralEngine
 from ccgen.engines.transliteration.rekhta_backend import RekhtaBackend
+from ccgen.engines.speech import voice_files
 from ccgen.engines.translation.argos_engine import install_pair
 from ccgen.utils import model_status
 from ccgen.utils.callbacks import emit_status
@@ -22,6 +26,7 @@ _log = logging.getLogger(__name__)
 CATEGORY_WHISPER = "whisper"
 CATEGORY_TRANSLATION = "translation"
 CATEGORY_TRANSLITERATION = "transliteration"
+CATEGORY_VOICES = "voices"
 
 # Engine names shown as sub-groups within each category tab in Manage Models - each
 # category has exactly one engine today, but is expected to grow more over time.
@@ -29,8 +34,10 @@ ENGINE_FASTER_WHISPER = "Faster Whisper"
 ENGINE_ARGOS_TRANSLATE = "Argos Translate"
 ENGINE_NEURAL_M2M100 = "Neural (M2M100)"
 ENGINE_NEURAL_REKHTA = "Neural (Rekhta)"
+ENGINE_XTTS_LABEL = "XTTS-v2 (voice cloning)"
+ENGINE_KOKORO_LABEL = "Kokoro"
+ENGINE_PIPER_LABEL = "Piper"
 
-_TRANSLATION_SOURCE = "en"
 
 # Approximate sizes for not-yet-downloaded assets, in MB. Unlike Whisper's well-published
 # sizes, Argos and these vendored repos expose no size field for uninstalled packages, so
@@ -64,7 +71,10 @@ def list_assets() -> list[AssetInfo]:
     whole cache directory and the catalog checks a dozen repos.
     """
     cache_info = _scan_cache()
-    return _whisper_assets(cache_info) + _translation_assets() + _transliteration_assets(cache_info)
+    return (
+        _whisper_assets(cache_info) + _translation_assets()
+        + _transliteration_assets(cache_info) + _voice_assets(cache_info)
+    )
 
 
 def download_asset(
@@ -85,9 +95,11 @@ def download_asset(
             if category == CATEGORY_WHISPER:
                 _download_whisper(key, progress_num_cb)
             elif category == CATEGORY_TRANSLATION:
-                install_pair(_TRANSLATION_SOURCE, key, progress_num_cb, progress_cb)
+                install_pair(*_translation_pair(key), progress_num_cb, progress_cb)
             elif category == CATEGORY_TRANSLITERATION:
                 _download_transliteration(key, progress_cb, progress_num_cb)
+            elif category == CATEGORY_VOICES:
+                _download_voice(key, progress_num_cb)
             else:
                 raise ValueError(f"Unknown asset id: {asset_id}")
     except RuntimeError:
@@ -104,9 +116,11 @@ def delete_asset(asset_id: str) -> None:
         if category == CATEGORY_WHISPER:
             _delete_hf_repo(ModelRepos.WHISPER[key])
         elif category == CATEGORY_TRANSLATION:
-            _delete_translation_pair(_TRANSLATION_SOURCE, key)
+            _delete_translation_pair(*_translation_pair(key))
         elif category == CATEGORY_TRANSLITERATION:
             _delete_transliteration(key)
+        elif category == CATEGORY_VOICES:
+            _delete_voice(key)
         else:
             raise ValueError(f"Unknown asset id: {asset_id}")
     except Exception as e:
@@ -132,22 +146,34 @@ def _whisper_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
 
 
 def _translation_assets() -> list[AssetInfo]:
-    """Build the Translation Languages category rows (English → each other supported target)."""
+    """Build the Translation Languages category rows: each language to and from English."""
     assets: list[AssetInfo] = []
     for name, code in LanguageOptions.TRANSLATION_TARGETS:
-        if code == _TRANSLATION_SOURCE:
+        if code == _PIVOT_LANG:
             continue  # "English → English" isn't a real, installable pair
-        downloaded = model_status.translation_pair_cached(_TRANSLATION_SOURCE, code)
-        assets.append(AssetInfo(
-            id=f"{CATEGORY_TRANSLATION}:{code}",
-            category=CATEGORY_TRANSLATION,
-            engine=ENGINE_ARGOS_TRANSLATE,
-            label=f"English → {name}",
-            downloaded=downloaded,
-            size_bytes=_installed_pair_size(_TRANSLATION_SOURCE, code) if downloaded else None,
-            approx_size_mb=_TRANSLATION_APPROX_SIZES_MB.get(code),
-        ))
+        for source, target, label in (
+            (_PIVOT_LANG, code, f"English → {name}"),
+            (code, _PIVOT_LANG, f"{name} → English"),
+        ):
+            downloaded = model_status.translation_pair_cached(source, target)
+            assets.append(AssetInfo(
+                id=f"{CATEGORY_TRANSLATION}:{source}-{target}",
+                category=CATEGORY_TRANSLATION,
+                engine=ENGINE_ARGOS_TRANSLATE,
+                label=label,
+                downloaded=downloaded,
+                size_bytes=_installed_pair_size(source, target) if downloaded else None,
+                approx_size_mb=_TRANSLATION_APPROX_SIZES_MB.get(code),
+            ))
     return assets
+
+
+def _translation_pair(key: str) -> tuple[str, str]:
+    """Split a translation asset key like "en-ur" into (source, target)."""
+    source, _, target = key.partition("-")
+    if not source or not target:
+        raise ValueError(f"Unknown translation asset: {key}")
+    return source, target
 
 
 def _transliteration_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
@@ -178,6 +204,75 @@ def _transliteration_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
         approx_size_mb=_TRANSLIT_APPROX_SIZES_MB.get("hi-ur"),
     ))
     return assets
+
+
+def _voice_assets(cache_info: Optional[Any]) -> list[AssetInfo]:
+    """Build the Voices category rows: the XTTS checkpoint, Kokoro's model, and each Piper voice."""
+    xtts_downloaded = voice_files.engine_files_cached(ENGINE_XTTS)
+    kokoro_downloaded = voice_files.engine_files_cached(ENGINE_KOKORO)
+    kokoro_dir = os.path.dirname(voice_files.kokoro_paths()[0])
+    assets = [
+        AssetInfo(
+            id=f"{CATEGORY_VOICES}:{ENGINE_XTTS}",
+            category=CATEGORY_VOICES,
+            engine=ENGINE_XTTS_LABEL,
+            label="Voice cloning model",
+            downloaded=xtts_downloaded,
+            size_bytes=_hf_repo_size(ModelRepos.XTTS, cache_info) if xtts_downloaded else None,
+            approx_size_mb=round(ModelRepos.XTTS_SIZE_BYTES / 1_000_000),
+        ),
+        AssetInfo(
+            id=f"{CATEGORY_VOICES}:{ENGINE_KOKORO}",
+            category=CATEGORY_VOICES,
+            engine=ENGINE_KOKORO_LABEL,
+            label=f"Kokoro model and all {sum(v.engine == ENGINE_KOKORO for v in VOICES)} voices",
+            downloaded=kokoro_downloaded,
+            size_bytes=voice_files.folder_size(kokoro_dir) if kokoro_downloaded else None,
+            approx_size_mb=round(sum(size for _, size, _ in ModelRepos.KOKORO_FILES) / 1_000_000),
+        ),
+    ]
+    for voice in VOICES:
+        if voice.engine != ENGINE_PIPER:
+            continue
+        downloaded = voice_files.engine_files_cached(ENGINE_PIPER, voice)
+        assets.append(AssetInfo(
+            id=f"{CATEGORY_VOICES}:{voice.key}",
+            category=CATEGORY_VOICES,
+            engine=ENGINE_PIPER_LABEL,
+            label=voice.label,
+            downloaded=downloaded,
+            size_bytes=voice_files.folder_size(voice_files.voice_dir(voice)) if downloaded else None,
+            approx_size_mb=round(voice.approx_size_bytes / 1_000_000) or None,
+        ))
+    return assets
+
+
+def _download_voice(key: str, progress_num_cb: Optional[Callable[[int, int], None]]) -> None:
+    """Download the XTTS checkpoint, Kokoro's model, or one Piper voice."""
+    if key == ENGINE_XTTS:
+        voice_files.ensure_xtts(progress_num_cb)
+    elif key == ENGINE_KOKORO:
+        voice_files.ensure_kokoro(progress_num_cb)
+    else:
+        voice_files.ensure_piper(_piper_voice(key), progress_num_cb)
+
+
+def _delete_voice(key: str) -> None:
+    """Remove the XTTS checkpoint, Kokoro's model, or one Piper voice."""
+    if key == ENGINE_XTTS:
+        _delete_hf_repo(ModelRepos.XTTS)
+    elif key == ENGINE_KOKORO:
+        voice_files.remove_engine_files(ENGINE_KOKORO)
+    else:
+        voice_files.remove_engine_files(ENGINE_PIPER, _piper_voice(key))
+
+
+def _piper_voice(key: str) -> VoiceOption:
+    """Resolve a "piper:<voice id>" asset key to its catalog voice."""
+    voice = voice_by_key(key)
+    if voice is None or voice.engine != ENGINE_PIPER:
+        raise ValueError(f"Unknown voice asset: {key}")
+    return voice
 
 
 def _download_whisper(model_name: str, progress_num_cb: Optional[Callable[[int, int], None]]) -> None:

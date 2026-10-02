@@ -1,43 +1,37 @@
 // qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import "components"
+import "pages"
 
 AppWindow {
     id: mainWin
 
-    width: 1120
-    height: 740
-    minimumWidth: 860
-    minimumHeight: 560
+    width: 1180
+    height: 760
+    minimumWidth: 900
+    minimumHeight: 580
     visible: true
     title: appController.appName + " " + appController.appVersion
 
-    readonly property var queue: transcriptionController.fileModel
-    readonly property bool busy: transcriptionController.busy
-    property string transcriptFile: ""
-    property var _rowOfSegment: ({})
     property var _prefsWindow: null
     property var _modelsWindow: null
 
-    // Why Start is unavailable right now ("" when it can run).
-    readonly property string startBlocker: {
-        if (transcriptionController.scanning) return "Wait for the folder scan to finish (or stop it)."
-        if (mainWin.queue.count === 0) return "Add files to the queue first."
-        if (!transcriptionController.hasOutputFormat) return "Select at least one output format."
-        if (transcriptionController.transliterateEnabled) {
-            if (transcriptionController.translitSource === transcriptionController.translitTarget)
-                return "Choose two different transliteration scripts."
-            if (transcriptionController.translitEngine === "neural" && !mainWin.neuralSupported)
-                return "The neural engine doesn't support this script pair. Choose the rule-based engine."
-        }
-        return ""
-    }
-    readonly property bool neuralSupported: modelsController.neuralAssetId(
-        transcriptionController.translitSource, transcriptionController.translitTarget).length > 0
+    // Every tab, in order. Shortcuts (Ctrl+1...), "Send to" menus, and the About text all
+    // derive from this list, so adding a tab never means updating hard-coded indexes.
+    readonly property var tasks: [
+        { key: "generate", label: "Generate", icon: "mic", controller: generateController },
+        { key: "translate", label: "Translate", icon: "globe", controller: translateController },
+        { key: "transliterate", label: "Transliterate", icon: "characters", controller: transliterateController },
+        { key: "dub", label: "Dub", icon: "speaker", controller: dubController },
+        { key: "workflow", label: "Workflow", icon: "workflow", controller: workflowController }
+    ]
+    readonly property var currentPage: pages.children[tabs.currentIndex]
+    readonly property var currentController: mainWin.tasks[tabs.currentIndex].controller
 
     // quitOnLastWindowClosed is disabled app-wide (see app.py) since it can misfire while a
     // QML window is still open, so closing the main window quits explicitly.
@@ -49,7 +43,7 @@ AppWindow {
             compact: true
             text: "Models"
             iconName: "library"
-            toolTipText: "Manage downloaded models (Ctrl+M)"
+            toolTipText: "Manage downloaded models and voices (Ctrl+M)"
             focusPolicy: Qt.TabFocus
             onClicked: mainWin.openModels()
         },
@@ -72,7 +66,7 @@ AppWindow {
         }
     ]
 
-    // ── Windows and dialogs ────────────────────────────────────────────────
+    // ── Windows ────────────────────────────────────────────────────────────
 
     function openPreferences() {
         if (!mainWin._prefsWindow) {
@@ -98,92 +92,45 @@ AppWindow {
         mainWin._modelsWindow.requestActivate()
     }
 
-    function start() {
-        if (mainWin.busy) return
-        if (mainWin.startBlocker.length > 0) { toast.show(mainWin.startBlocker); return }
-        transcriptionController.startQueue()
+    // Hand a finished file's results to another tab, each with the language it is in.
+    function sendFiles(fromKey, toKey, sourcePath, outputs) {
+        var from = mainWin.tasks.findIndex(t => t.key === fromKey)
+        var to = mainWin.tasks.findIndex(t => t.key === toKey)
+        if (from < 0 || to < 0 || outputs.length === 0) return
+        var languages = outputs.map(path => mainWin.tasks[from].controller.outputLanguage(path))
+        mainWin.tasks[to].controller.receiveFiles(outputs, sourcePath, languages)
+        tabs.currentIndex = to
     }
 
-    FileDialog {
-        id: filePicker
-        title: "Add media or subtitle files"
-        fileMode: FileDialog.OpenFiles
-        nameFilters: [
-            "Supported files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts *.m2ts *.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma *.srt *.vtt *.lrc *.ass *.ssa *.sbv)",
-            "Video files (*.mp4 *.mkv *.avi *.mov *.webm *.flv *.wmv *.ts *.m2ts)",
-            "Audio files (*.mp3 *.wav *.m4a *.flac *.aac *.ogg *.wma)",
-            "Subtitle files (*.srt *.vtt *.lrc *.ass *.ssa *.sbv)"
-        ]
-        onAccepted: transcriptionController.addFiles(selectedFiles)
-    }
-
-    FolderDialog {
-        id: folderPicker
-        title: "Add every supported file in a folder (including subfolders)"
-        onAccepted: transcriptionController.addFolder(selectedFolder.toString())
-    }
-
-    FolderDialog {
-        id: outputFolderPicker
-        title: "Choose where subtitle files are saved"
-        onAccepted: transcriptionController.setOutputDir(selectedFolder.toString())
+    function sendTargetsFor(keys) {
+        return mainWin.tasks.filter(t => keys.indexOf(t.key) >= 0).map(t => ({ key: t.key, label: t.label + " tab" }))
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────
 
-    Shortcut { sequences: [StandardKey.Open]; onActivated: filePicker.open() }
-    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: folderPicker.open() }
-    Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter", "F5"]; onActivated: mainWin.start() }
-    Shortcut { sequence: "Escape"; enabled: mainWin.busy; onActivated: transcriptionController.cancelQueue() }
+    Shortcut { sequences: [StandardKey.Open]; onActivated: mainWin.currentPage.openFiles() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: mainWin.currentPage.openFolder() }
+    Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter", "F5"]; onActivated: mainWin.currentController.startQueue() }
+    Shortcut { sequence: "Escape"; enabled: mainWin.currentController.busy; onActivated: mainWin.currentController.cancelQueue() }
     Shortcut { sequence: "Ctrl+,"; onActivated: mainWin.openPreferences() }
     Shortcut { sequence: "Ctrl+M"; onActivated: mainWin.openModels() }
     Shortcut { sequence: "F1"; onActivated: aboutDialog.open() }
-    Shortcut { sequence: "Ctrl+1"; onActivated: tabs.currentIndex = 0 }
-    Shortcut { sequence: "Ctrl+2"; onActivated: tabs.currentIndex = 1 }
-
-    // ── Controller events ──────────────────────────────────────────────────
-
-    Connections {
-        target: transcriptionController
-
-        function onFileStarted(path, name) {
-            transcriptModel.clear()
-            mainWin._rowOfSegment = {}
-            mainWin.transcriptFile = name
-            if (transcriptionController.runPosition === 1) tabs.currentIndex = 1
-        }
-
-        function onSegmentAdded(id, start, end, text, kind) {
-            var row = mainWin._rowOfSegment[id]
-            if (row === undefined) {
-                row = transcriptModel.count
-                mainWin._rowOfSegment[id] = row
-                transcriptModel.append({
-                    segStart: start, segEnd: end,
-                    segText: kind === "transcript" ? text : "",
-                    segTranslation: kind === "translation" ? text : "",
-                    segTransliteration: kind === "transliteration" ? text : ""
-                })
-                return
-            }
-            var role = kind === "translation" ? "segTranslation"
-                : kind === "transliteration" ? "segTransliteration" : "segText"
-            transcriptModel.setProperty(row, role, text)
-        }
-
-        function onNotice(message) {
-            toast.show(message)
+    Instantiator {
+        model: mainWin.tasks.length
+        delegate: Shortcut {
+            required property int index
+            sequence: "Ctrl+" + (index + 1)
+            onActivated: tabs.currentIndex = index
         }
     }
 
     Connections {
         target: prefsController
         function onSaveFinished(success, error) {
-            if (success) transcriptionController.reloadDefaults()
+            if (!success) return
+            for (var i = 0; i < mainWin.tasks.length; i++) mainWin.tasks[i].controller.reloadDefaults()
         }
     }
-
-    ListModel { id: transcriptModel }
 
     // ── Layout ─────────────────────────────────────────────────────────────
 
@@ -191,635 +138,189 @@ AppWindow {
         anchors.fill: parent
         spacing: 0
 
-        SplitView {
+        TabBar {
+            id: tabs
+            objectName: "taskTabs"
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Horizontal
+            Layout.leftMargin: Theme.spaceLg
+            Layout.topMargin: Theme.spaceSm
+            background: Item {}
 
-            handle: Rectangle {
-                implicitWidth: 5
-                color: SplitHandle.pressed || SplitHandle.hovered ? Theme.accentSoft : Theme.background
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 1
-                    height: parent.height
-                    color: Theme.border
-                }
-            }
+            Repeater {
+                model: mainWin.tasks
+                delegate: TabButton {
+                    id: tabButton
+                    required property var modelData
+                    required property int index
+                    width: implicitWidth + 28
+                    font.pixelSize: Theme.fontBody
+                    Accessible.name: modelData.label + (modelData.controller.busy ? ", running" : "")
+                    ToolTip.visible: hovered
+                    ToolTip.text: modelData.label + " (Ctrl+" + (index + 1) + ")"
+                    ToolTip.delay: 600
 
-            // ── Queue panel ─────────────────────────────────────────────────
-            Rectangle {
-                SplitView.preferredWidth: 400
-                SplitView.minimumWidth: 300
-                SplitView.maximumWidth: 600
-                color: Theme.surface
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.spaceLg
-                        Layout.bottomMargin: Theme.spaceSm
+                    contentItem: RowLayout {
                         spacing: Theme.spaceSm
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                text: "Queue"
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontTitle
-                                font.weight: Font.DemiBold
-                                color: Theme.text
-                                Accessible.role: Accessible.Heading
-                                Accessible.name: "Queue"
-                            }
-                            Item { Layout.fillWidth: true }
-                            Text {
-                                text: mainWin.queue.count === 0 ? "" :
-                                    mainWin.queue.count + (mainWin.queue.count === 1 ? " file" : " files")
-                                    + "  ·  " + mainWin.queue.totalSize
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
-                                color: Theme.textMuted
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spaceSm
-
-                            AppButton {
-                                kind: "primary"
-                                text: "Add files"
-                                iconName: "add"
-                                toolTipText: "Add media or subtitle files (Ctrl+O)"
-                                onClicked: filePicker.open()
-                            }
-                            AppButton {
-                                text: "Add folder"
-                                iconName: "folder"
-                                toolTipText: "Add every supported file in a folder and its subfolders (Ctrl+Shift+O)"
-                                onClicked: folderPicker.open()
-                            }
-                            Item { Layout.fillWidth: true }
-                            AppButton {
-                                id: queueMenuButton
-                                kind: "ghost"
-                                iconName: "more"
-                                toolTipText: "More queue actions"
-                                enabled: mainWin.queue.count > 0
-                                onClicked: queueMenu.popup(queueMenuButton, 0, queueMenuButton.height)
-
-                                Menu {
-                                    id: queueMenu
-                                    MenuItem {
-                                        text: "Select all"
-                                        onTriggered: mainWin.queue.selectAll()
-                                    }
-                                    MenuItem {
-                                        text: "Remove selected"
-                                        enabled: mainWin.queue.selectedCount > 0
-                                        onTriggered: mainWin.queue.removeSelected()
-                                    }
-                                    MenuItem {
-                                        text: "Remove finished"
-                                        enabled: mainWin.queue.doneCount > 0
-                                        onTriggered: mainWin.queue.removeFinished()
-                                    }
-                                    MenuSeparator {}
-                                    MenuItem {
-                                        text: "Clear queue"
-                                        onTriggered: transcriptionController.clearQueue()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
-
-                    FileList {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        fileModel: mainWin.queue
-                        busy: mainWin.busy
-                        scanning: transcriptionController.scanning
-                        scanFound: transcriptionController.scanFound
-                        onAddFilesRequested: filePicker.open()
-                        onAddFolderRequested: folderPicker.open()
-                        onFilesDropped: urls => transcriptionController.addFiles(urls)
-                        onRevealRequested: path => appController.revealFile(path)
-                    }
-                }
-            }
-
-            // ── Settings / transcript panel ────────────────────────────────
-            ColumnLayout {
-                SplitView.fillWidth: true
-                spacing: 0
-
-                TabBar {
-                    id: tabs
-                    objectName: "mainTabs"
-                    Layout.fillWidth: true
-                    Layout.leftMargin: Theme.spaceLg
-                    Layout.topMargin: Theme.spaceSm
-                    background: Item {}
-
-                    TabButton {
-                        text: mainWin.busy ? "Settings (locked)" : "Settings"
-                        width: implicitWidth + 24
-                        font.pixelSize: Theme.fontBody
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Options for the next run (Ctrl+1)"
-                        ToolTip.delay: 600
-                    }
-                    TabButton {
-                        text: transcriptModel.count > 0 ? "Transcript (" + transcriptModel.count + ")" : "Transcript"
-                        width: implicitWidth + 24
-                        font.pixelSize: Theme.fontBody
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Live subtitles of the file being processed (Ctrl+2)"
-                        ToolTip.delay: 600
-                    }
-                }
-
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
-
-                StackLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    currentIndex: tabs.currentIndex
-
-                    ScrollView {
-                    id: settingsPage
-                    contentWidth: availableWidth
-                    clip: true
-
-                    ColumnLayout {
-                        width: settingsPage.availableWidth
-                        spacing: Theme.spaceLg
-                        enabled: !mainWin.busy
-
-                        Item { Layout.preferredHeight: Theme.spaceXs }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceXl
-                            Layout.rightMargin: Theme.spaceXl
-                            Layout.preferredHeight: lockedText.implicitHeight + 2 * Theme.spaceMd
-                            radius: Theme.radius
-                            color: Theme.accentSoft
-                            visible: mainWin.busy
-
-                            Text {
-                                id: lockedText
-                                anchors.fill: parent
-                                anchors.margins: Theme.spaceMd
-                                text: "Settings are locked while files are processing. Changes apply to the next run."
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
-                                color: Theme.text
-                                wrapMode: Text.WordWrap
-                            }
-                        }
-
-                        Card {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceXl
-                            Layout.rightMargin: Theme.spaceXl
-                            title: "Transcription"
-                            description: "Speech recognition runs offline with Whisper."
-                            iconName: "mic"
-
-                            FormRow {
-                                label: "Model"
-                                hint: "Larger models are more accurate but slower."
-                                StyledComboBox {
-                                    id: modelCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Transcription model"
-                                    toolTipText: "Whisper model used to recognize speech. Bigger models are more accurate but slower; models download once on first use."
-                                    model: prefsController.modelOptions
-                                    readiness: mainWin.whisperReadiness(modelsController.readiness)
-                                    onActivated: transcriptionController.setModelName(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.modelName)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { modelCombo.selectCode(transcriptionController.modelName) }
-                                    }
-                                }
-                            }
-
-                            FormRow {
-                                label: "Spoken language"
-                                hint: "Auto-detect works for most files; pick the language if detection guesses wrong."
-                                StyledComboBox {
-                                    id: languageCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Spoken language"
-                                    toolTipText: "Language spoken in the files. Auto-detect listens to the opening minutes; choose a language to skip detection."
-                                    model: prefsController.languageOptions
-                                    onActivated: transcriptionController.setLanguage(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.language)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { languageCombo.selectCode(transcriptionController.language) }
-                                    }
-                                }
-                            }
-                        }
-
-                        Card {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceXl
-                            Layout.rightMargin: Theme.spaceXl
-                            title: "Translation"
-                            description: "Translates whole sentences offline. English bridges other language pairs."
-                            iconName: "globe"
-                            trailing: AppSwitch {
-                                checked: transcriptionController.translateEnabled
-                                onToggled: transcriptionController.setTranslate(checked)
-                                accessibleName: "Translate subtitles"
-                                toolTipText: "Also write subtitles translated into another language, e.g. movie_ur.srt."
-                            }
-
-                            FormRow {
-                                label: "Translate to"
-                                visible: transcriptionController.translateEnabled
-                                StyledComboBox {
-                                    id: targetCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Translation target language"
-                                    toolTipText: "Language the subtitles are translated into."
-                                    model: prefsController.targetOptions
-                                    readiness: mainWin.translationReadiness(modelsController.readiness)
-                                    onActivated: transcriptionController.setTargetLang(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.targetLang)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { targetCombo.selectCode(transcriptionController.targetLang) }
-                                    }
-                                }
-                            }
-                        }
-
-                        Card {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceXl
-                            Layout.rightMargin: Theme.spaceXl
-                            title: "Transliteration"
-                            description: "Rewrites the text in another script, e.g. Urdu as natural Roman Urdu."
-                            iconName: "characters"
-                            trailing: AppSwitch {
-                                checked: transcriptionController.transliterateEnabled
-                                onToggled: transcriptionController.setTransliterate(checked)
-                                accessibleName: "Transliterate subtitles"
-                                toolTipText: "Also write subtitles rewritten in another script, e.g. movie_tr_ur_roman.srt."
-                            }
-
-                            FormRow {
-                                label: "Scripts"
-                                visible: transcriptionController.transliterateEnabled
-                                StyledComboBox {
-                                    id: translitSourceCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Transliterate from script"
-                                    toolTipText: "Script the source text is written in."
-                                    model: prefsController.translitSchemeOptions
-                                    onActivated: transcriptionController.setTranslitSource(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.translitSource)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { translitSourceCombo.selectCode(transcriptionController.translitSource) }
-                                    }
-                                }
-                                Icon { name: "chevronDown"; rotation: -90; size: 10; color: Theme.textMuted }
-                                StyledComboBox {
-                                    id: translitTargetCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Transliterate to script"
-                                    toolTipText: "Script to rewrite the text in."
-                                    model: prefsController.translitSchemeOptions
-                                    onActivated: transcriptionController.setTranslitTarget(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.translitTarget)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { translitTargetCombo.selectCode(transcriptionController.translitTarget) }
-                                    }
-                                }
-                            }
-
-                            FormRow {
-                                label: "Convert from"
-                                visible: transcriptionController.transliterateEnabled
-                                StyledComboBox {
-                                    id: translitInputCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Text to transliterate"
-                                    toolTipText: "Transliterate the original transcript or its translation."
-                                    model: prefsController.translitInputOptions
-                                    onActivated: transcriptionController.setTranslitInput(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.translitInput)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { translitInputCombo.selectCode(transcriptionController.translitInput) }
-                                    }
-                                }
-                            }
-
-                            FormRow {
-                                label: "Engine"
-                                hint: transcriptionController.translitEngine === "neural" && !mainWin.neuralSupported
-                                    ? "Neural supports Urdu and Roman Urdu both ways, and Hindi or Punjabi to Urdu."
-                                    : "Neural is more natural but downloads a model on first use."
-                                visible: transcriptionController.transliterateEnabled
-                                StyledComboBox {
-                                    id: translitEngineCombo
-                                    Layout.fillWidth: true
-                                    accessibleName: "Transliteration engine"
-                                    toolTipText: "Rule-based is instant and needs no download. Neural sounds more natural but downloads a model."
-                                    model: prefsController.translitEngineOptions
-                                    readiness: mainWin.engineReadiness(modelsController.readiness)
-                                    onActivated: transcriptionController.setTranslitEngine(currentValue)
-                                    Component.onCompleted: selectCode(transcriptionController.translitEngine)
-                                    Connections {
-                                        target: transcriptionController
-                                        function onOptionsChanged() { translitEngineCombo.selectCode(transcriptionController.translitEngine) }
-                                    }
-                                }
-                            }
-                        }
-
-                        Card {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceXl
-                            Layout.rightMargin: Theme.spaceXl
-                            title: "Output"
-                            description: "Files are named after the source, e.g. movie.srt, movie_ur.srt."
-                            iconName: "page"
-
-                            FormRow {
-                                label: "Formats"
-                                hint: transcriptionController.hasOutputFormat ? "" : "Select at least one format."
-                                Flow {
-                                    Layout.fillWidth: true
-                                    spacing: Theme.spaceSm
-                                    Repeater {
-                                        model: [
-                                            { code: "srt", label: "SRT", info: "SubRip, works almost everywhere", on: transcriptionController.emitSrt },
-                                            { code: "vtt", label: "VTT", info: "WebVTT, for web players and HTML5 video", on: transcriptionController.emitVtt },
-                                            { code: "ass", label: "ASS", info: "Advanced SubStation Alpha, styled subtitles", on: transcriptionController.emitAss },
-                                            { code: "sbv", label: "SBV", info: "YouTube subtitle format", on: transcriptionController.emitSbv },
-                                            { code: "lrc", label: "LRC", info: "Lyrics format, start times only", on: transcriptionController.emitLrc }
-                                        ]
-                                        delegate: FormatChip {
-                                            required property var modelData
-                                            text: modelData.label
-                                            description: modelData.info
-                                            checked: modelData.on
-                                            onToggled: transcriptionController.setFormat(modelData.code, checked)
-                                        }
-                                    }
-                                }
-                            }
-
-                            FormRow {
-                                label: "Save to"
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: Theme.controlHeight
-                                    radius: Theme.radius
-                                    color: Theme.surfaceAlt
-                                    border.width: 1
-                                    border.color: Theme.border
-
-                                    Text {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 10
-                                        anchors.rightMargin: 10
-                                        verticalAlignment: Text.AlignVCenter
-                                        text: transcriptionController.outputDir || "Same folder as each source file"
-                                        font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.fontBody
-                                        color: transcriptionController.outputDir ? Theme.text : Theme.textMuted
-                                        elide: Text.ElideMiddle
-                                        Accessible.role: Accessible.StaticText
-                                        Accessible.name: "Save to: " + text
-                                    }
-                                }
-                                AppButton {
-                                    text: "Browse..."
-                                    toolTipText: "Choose a folder for all subtitle files"
-                                    onClicked: outputFolderPicker.open()
-                                }
-                                AppButton {
-                                    kind: "ghost"
-                                    iconName: "cancel"
-                                    toolTipText: "Save next to each source file instead"
-                                    visible: transcriptionController.outputDir.length > 0
-                                    onClicked: transcriptionController.setOutputDir("")
-                                }
-                            }
-                        }
-
-                        Item { Layout.preferredHeight: Theme.spaceLg }
-                    }
-                }
-
-                    ColumnLayout {
-                    spacing: 0
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.spaceLg
-                        Layout.leftMargin: Theme.spaceXl
-                        Layout.rightMargin: Theme.spaceXl
-                        visible: mainWin.transcriptFile.length > 0
-
-                        Icon { name: "captions"; color: Theme.accent }
-                        Text {
-                            Layout.fillWidth: true
-                            text: mainWin.transcriptFile
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSubtitle
-                            font.weight: Font.DemiBold
-                            color: Theme.text
-                            elide: Text.ElideMiddle
-                            Accessible.role: Accessible.Heading
-                            Accessible.name: "Transcript of " + text
-                        }
-                        Text {
-                            text: transcriptModel.count + " cues"
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontCaption
-                            color: Theme.textMuted
-                        }
-                    }
-
-                    ListView {
-                        id: transcriptView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.leftMargin: Theme.spaceLg
-                        Layout.rightMargin: Theme.spaceLg
-                        model: transcriptModel
-                        clip: true
-                        spacing: 2
-                        activeFocusOnTab: true
-                        boundsBehavior: Flickable.StopAtBounds
-                        Accessible.role: Accessible.List
-                        Accessible.name: "Transcript"
-
-                        // Keep following new cues only while the user is already at the bottom.
-                        property bool follow: true
-                        onMovementEnded: follow = atYEnd
-                        onCountChanged: if (follow) Qt.callLater(positionViewAtEnd)
-
-                        delegate: SegmentItem {
-                            width: ListView.view.width
-                        }
-
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-                        Keys.onUpPressed: flick(0, 800)
-                        Keys.onDownPressed: flick(0, -800)
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        visible: transcriptModel.count === 0
-                        spacing: Theme.spaceSm
-
-                        Item { Layout.fillHeight: true }
                         Icon {
-                            Layout.alignment: Qt.AlignHCenter
-                            name: "captions"
-                            size: 32
-                            color: Theme.textMuted
+                            name: tabButton.modelData.icon
+                            size: 14
+                            color: tabButton.checked ? Theme.accent : Theme.textMuted
                         }
                         Text {
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            text: mainWin.busy ? "Waiting for the first lines..." : "Subtitles appear here as each file is processed."
+                            text: tabButton.modelData.label
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
-                            color: Theme.textMuted
-                            wrapMode: Text.WordWrap
+                            font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
+                            color: tabButton.checked ? Theme.text : Theme.textMuted
                         }
-                        Item { Layout.fillHeight: true }
+                        BusyIndicator {
+                            visible: tabButton.modelData.controller.busy
+                            running: visible
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            padding: 0
+                            Accessible.ignored: true
+                        }
                     }
-                }
                 }
             }
         }
 
-        Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: 72
-        color: Theme.surface
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
 
-        Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.border }
+        StackLayout {
+            id: pages
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabs.currentIndex
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.spaceXl
-            anchors.rightMargin: Theme.spaceXl
-            spacing: Theme.spaceLg
+            TaskPage {
+                controller: generateController
+                firstRunSteps: [
+                    "Add the videos or audio you want subtitles for.",
+                    "Check the model, language, and formats in Settings.",
+                    "Press Start (Ctrl+Enter). Send the results to Translate or Dub from the queue menu."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "transliterate", "dub"])
+                emptyResultsText: "Subtitles appear here as each file is transcribed."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("generate", target, path, outputs)
+                onNotice: message => toast.show(message)
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceXs
-
-                RowLayout {
+                GenerateSettings {
                     Layout.fillWidth: true
-                    spacing: Theme.spaceSm
-
-                    Text {
-                        id: statusText
-                        Layout.fillWidth: true
-                        text: {
-                            if (mainWin.busy) {
-                                var stage = transcriptionController.stage || "Working..."
-                                return "File " + transcriptionController.runPosition + " of " + transcriptionController.runTotal + "  ·  " + stage
-                            }
-                            if (transcriptionController.scanning) return "Scanning folder... " + transcriptionController.scanFound + " files found so far."
-                            if (transcriptionController.summary) return transcriptionController.summary
-                            if (mainWin.queue.count === 0) return "Ready. Add files to begin."
-                            return mainWin.startBlocker || ("Ready to process " + mainWin.queue.runnableCount + (mainWin.queue.runnableCount === 1 ? " file." : " files."))
-                        }
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontBody
-                        font.weight: Font.DemiBold
-                        color: !mainWin.busy && !transcriptionController.scanning && mainWin.startBlocker && mainWin.queue.count > 0
-                            ? Theme.warning : Theme.text
-                        elide: Text.ElideRight
-                        Accessible.role: Accessible.StaticText
-                        Accessible.name: text
-                    }
-                    Text {
-                        visible: mainWin.busy
-                        text: Math.round(transcriptionController.overallProgress * 100) + "%"
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontCaption
-                        color: Theme.textMuted
-                    }
+                    options: generateController.options
+                    onOptionChanged: (key, value) => generateController.setOption(key, value)
                 }
-
-                ProgressBar {
+                OutputSettings {
                     Layout.fillWidth: true
-                    visible: mainWin.busy
-                    from: 0
-                    to: 1
-                    value: transcriptionController.overallProgress
-                    Accessible.role: Accessible.ProgressBar
-                    Accessible.name: "Overall progress"
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    visible: mainWin.busy && transcriptionController.currentFile.length > 0
-                    text: transcriptionController.currentFile
-                        + (transcriptionController.stageProgress >= 0
-                           ? "  ·  " + Math.round(transcriptionController.stageProgress * 100) + "% of this step" : "")
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
-                    color: Theme.textMuted
-                    elide: Text.ElideMiddle
+                    options: generateController.options
+                    namingExample: "movie.srt"
+                    onOptionChanged: (key, value) => generateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => generateController.setFormat(code, enabled)
                 }
             }
 
-            AppButton {
-                visible: !mainWin.busy && transcriptionController.lastOutputFolder.length > 0
-                text: "Open output folder"
-                iconName: "folderOpen"
-                toolTipText: transcriptionController.lastOutputFolder
-                onClicked: appController.openFolder(transcriptionController.lastOutputFolder)
+            TaskPage {
+                controller: translateController
+                firstRunSteps: [
+                    "Add subtitle files, or send them here from the Generate tab.",
+                    "Choose the language to translate into.",
+                    "Press Start (Ctrl+Enter)."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["transliterate", "dub"])
+                emptyResultsText: "Each line and its translation appear here."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("translate", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                TranslateSettings {
+                    Layout.fillWidth: true
+                    options: translateController.options
+                    onOptionChanged: (key, value) => translateController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: translateController.options
+                    namingExample: "movie_ur.srt"
+                    onOptionChanged: (key, value) => translateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => translateController.setFormat(code, enabled)
+                }
             }
 
-            AppButton {
-                visible: mainWin.busy
-                kind: "danger"
-                text: "Cancel"
-                iconName: "stop"
-                toolTipText: "Stop after the current step; remaining files stay queued (Esc)"
-                onClicked: transcriptionController.cancelQueue()
+            TaskPage {
+                controller: transliterateController
+                firstRunSteps: [
+                    "Add subtitle files, or send them here from another tab.",
+                    "Choose the scripts to convert between.",
+                    "Press Start (Ctrl+Enter)."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "dub"])
+                emptyResultsText: "Each line and its new script appear here."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("transliterate", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                TransliterateSettings {
+                    Layout.fillWidth: true
+                    options: transliterateController.options
+                    onOptionChanged: (key, value) => transliterateController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: transliterateController.options
+                    namingExample: "movie_tr_ur_roman.srt"
+                    onOptionChanged: (key, value) => transliterateController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => transliterateController.setFormat(code, enabled)
+                }
             }
 
-            AppButton {
-                visible: !mainWin.busy
-                kind: "primary"
-                text: mainWin.queue.runnableCount > 0 ? "Start (" + mainWin.queue.runnableCount + ")" : "Start"
-                iconName: "play"
-                enabled: mainWin.startBlocker.length === 0
-                toolTipText: enabled ? "Process the queue (Ctrl+Enter)" : mainWin.startBlocker
-                onClicked: mainWin.start()
+            TaskPage {
+                controller: dubController
+                allowCompanion: true
+                firstRunSteps: [
+                    "Add a video together with the subtitle to speak (movie.mp4 and movie_es.srt pair up), or send a translation here.",
+                    "Choose the voices. Voice cloning keeps each speaker's own voice.",
+                    "Press Start (Ctrl+Enter). The dub is added as a new audio track."
+                ]
+                emptyResultsText: "The lines being spoken appear here."
+                onNotice: message => toast.show(message)
+
+                DubSettings {
+                    Layout.fillWidth: true
+                    options: dubController.options
+                    onOptionChanged: (key, value) => dubController.setOption(key, value)
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: dubController.options
+                    showFormats: false
+                    namingExample: "movie_dub_es.mkv"
+                    onOptionChanged: (key, value) => dubController.setOption(key, value)
+                }
+            }
+
+            TaskPage {
+                controller: workflowController
+                firstRunSteps: [
+                    "Add videos, audio, or subtitle files.",
+                    "Build the steps in Settings, e.g. Generate, Translate, then Dub.",
+                    "Press Start (Ctrl+Enter). Every file runs through every step."
+                ]
+                sendTargets: mainWin.sendTargetsFor(["translate", "transliterate", "dub"])
+                emptyResultsText: "Lines from every step appear here as they are made."
+                onSendRequested: (target, path, outputs) => mainWin.sendFiles("workflow", target, path, outputs)
+                onNotice: message => toast.show(message)
+
+                WorkflowEditor {
+                    Layout.fillWidth: true
+                }
+                OutputSettings {
+                    Layout.fillWidth: true
+                    options: workflowController.options
+                    namingExample: "movie.srt, movie_ur.srt, movie_dub_ur.mkv"
+                    onOptionChanged: (key, value) => workflowController.setOption(key, value)
+                    onFormatToggled: (code, enabled) => workflowController.setFormat(code, enabled)
+                }
             }
         }
-    }
     }
 
     Toast {
@@ -830,38 +331,6 @@ AppWindow {
         z: 50
     }
 
-
-
-
-    // ── Download badges for the combo boxes ────────────────────────────────
-
-    function whisperReadiness(readiness) {
-        var result = {}
-        var options = prefsController.modelOptions
-        for (var i = 0; i < options.length; i++) {
-            var ready = readiness[modelsController.whisperAssetId(options[i].code)]
-            if (ready !== undefined) result[options[i].code] = ready
-        }
-        return result
-    }
-
-    function translationReadiness(readiness) {
-        var result = {}
-        var options = prefsController.targetOptions
-        for (var i = 0; i < options.length; i++) {
-            var ready = readiness[modelsController.translationAssetId(options[i].code)]
-            if (ready !== undefined) result[options[i].code] = ready
-        }
-        return result
-    }
-
-    function engineReadiness(readiness) {
-        var id = modelsController.neuralAssetId(transcriptionController.translitSource, transcriptionController.translitTarget)
-        var result = {}
-        if (id && readiness[id] !== undefined) result["neural"] = readiness[id]
-        return result
-    }
-
     // ── About ──────────────────────────────────────────────────────────────
 
     Dialog {
@@ -870,7 +339,7 @@ AppWindow {
         modal: true
         standardButtons: Dialog.Close
         anchors.centerIn: parent
-        width: Math.min(460, mainWin.width - 48)
+        width: Math.min(480, mainWin.width - 48)
 
         ColumnLayout {
             anchors.fill: parent
@@ -913,7 +382,8 @@ AppWindow {
             Text {
                 Layout.fillWidth: true
                 text: "Shortcuts: Ctrl+O add files, Ctrl+Shift+O add folder, Ctrl+Enter start, Esc cancel, "
-                    + "Ctrl+, preferences, Ctrl+M models, Ctrl+1 / Ctrl+2 switch tabs."
+                    + "Ctrl+, preferences, Ctrl+M models, Ctrl+1 to Ctrl+" + mainWin.tasks.length + " switch tabs ("
+                    + mainWin.tasks.map(t => t.label).join(", ") + ")."
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontCaption
                 color: Theme.textMuted

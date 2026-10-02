@@ -8,7 +8,7 @@ import ctranslate2
 import numpy as np
 from faster_whisper import WhisperModel
 
-from ccgen.config.defaults import ComputeDefaults, ModelDefaults, TranscriptionDefaults
+from ccgen.config.defaults import AudioDefaults, ComputeDefaults, ModelDefaults, TranscriptionDefaults
 from ccgen.core import Segment, WordToken
 from ccgen.engines.captions.base import CaptionEngine
 from ccgen.engines.model_cache import ModelCache
@@ -87,7 +87,7 @@ class WhisperEngine(CaptionEngine):
 
     def transcribe(
         self,
-        audio_path: str,
+        audio: str | np.ndarray,
         language: Optional[str] = TranscriptionDefaults.DEFAULT_LANGUAGE,
         beam_size: int = TranscriptionDefaults.BEAM_SIZE,
         vad_filter: bool = TranscriptionDefaults.VAD_FILTER,
@@ -95,7 +95,7 @@ class WhisperEngine(CaptionEngine):
         segment_cb: Optional[Callable[["Segment"], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[Segment]:
-        """Transcribe an audio file and return a list of word-timestamped segments.
+        """Transcribe a media file path or 16 kHz mono samples into word-timestamped segments.
 
         Raises RuntimeError when the model is not loaded or transcription fails, and lets
         JobCancelled from a callback propagate so a cancelled job stops between segments.
@@ -103,14 +103,17 @@ class WhisperEngine(CaptionEngine):
         try:
             if self._model is None:
                 raise RuntimeError("Call load() before transcribe().")
-            if not os.path.isfile(audio_path):
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            if isinstance(audio, str):
+                if not os.path.isfile(audio):
+                    raise FileNotFoundError(f"Audio file not found: {audio}")
+                source = os.path.basename(audio)
+            else:
+                source = f"{audio.size / AudioDefaults.SAMPLE_RATE:.1f} s of audio"
             _log.info(
-                "Transcribing: %s (lang=%s, beam=%d, vad=%s)",
-                os.path.basename(audio_path), language, beam_size, vad_filter,
+                "Transcribing: %s (lang=%s, beam=%d, vad=%s)", source, language, beam_size, vad_filter,
             )
             segments = list(
-                self._iter_segments(audio_path, language, beam_size, vad_filter, segment_cb, progress_num_cb)
+                self._iter_segments(audio, language, beam_size, vad_filter, segment_cb, progress_num_cb)
             )
             _log.info("Transcription complete: %d segments", len(segments))
             return segments
@@ -149,7 +152,7 @@ class WhisperEngine(CaptionEngine):
 
     def _iter_segments(
         self,
-        audio_path: str,
+        audio: str | np.ndarray,
         language: Optional[str],
         beam_size: int,
         vad_filter: bool,
@@ -159,7 +162,7 @@ class WhisperEngine(CaptionEngine):
         """Iterate faster-whisper output, yield typed Segment dicts, and fire segment_cb per segment."""
         vad_params = {"min_silence_duration_ms": TranscriptionDefaults.VAD_MIN_SILENCE_MS}
         segments, info = self._model.transcribe(  # type: ignore[union-attr]
-            audio_path,
+            audio,
             language=language,
             beam_size=beam_size,
             word_timestamps=TranscriptionDefaults.WORD_TIMESTAMPS,

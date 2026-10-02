@@ -28,7 +28,8 @@ AppWindow {
     readonly property var categories: [
         { key: "whisper", label: "Transcription", hint: "Whisper speech recognition models. Larger models are more accurate and slower." },
         { key: "translation", label: "Translation", hint: "Offline language packages. Each one translates between English and that language; English bridges other pairs." },
-        { key: "transliteration", label: "Transliteration", hint: "Optional neural models for more natural script conversion. The rule-based engine needs no download." }
+        { key: "transliteration", label: "Transliteration", hint: "Optional neural models for more natural script conversion. The rule-based engine needs no download." },
+        { key: "voices", label: "Voices", hint: "Dubbing voices. XTTS-v2 clones the original speakers; Kokoro and Piper are ready-made voices. Each downloads once." }
     ]
 
     Component.onCompleted: rebuild()
@@ -105,8 +106,23 @@ AppWindow {
 
     function downloadAllInGroup(category, engine) {
         manageWin.rowsFor(category, engine).forEach(function(row) {
-            if (!row.downloaded && row.downloadState === "idle") modelsController.downloadAsset(row.id)
+            if (!row.downloaded && row.downloadState === "idle") manageWin.requestDownload(row.id)
         })
+    }
+
+    // The voice cloning model asks for its licence once before its first download.
+    function requestDownload(id) {
+        var accepted = prefsController.settings.dubbing && prefsController.settings.dubbing.xtts_terms_accepted
+        if (id === "voices:xtts" && !accepted) {
+            termsDialog.open()
+            return
+        }
+        modelsController.downloadAsset(id)
+    }
+
+    XttsTermsDialog {
+        id: termsDialog
+        onAccepted: modelsController.downloadAsset("voices:xtts")
     }
 
     function cancelDownload(id) {
@@ -254,6 +270,7 @@ AppWindow {
                                         compact: true
                                         text: "Download all"
                                         iconName: "download"
+                                        toolTipText: "Download every " + group.modelData + " model not yet on this computer"
                                         enabled: group.downloadedCount < group.rows.length
                                         onClicked: manageWin.downloadAllInGroup(tabPage.modelData.key, group.modelData)
                                     },
@@ -261,6 +278,7 @@ AppWindow {
                                         compact: true
                                         kind: "danger"
                                         text: "Remove all"
+                                        toolTipText: "Delete every downloaded " + group.modelData + " model to free disk space"
                                         enabled: group.downloadedCount > 0
                                         onClicked: manageWin.askRemove(group.rows, "all " + group.modelData + " models")
                                     }
@@ -305,6 +323,7 @@ AppWindow {
             AppButton {
                 kind: "primary"
                 text: "Close"
+                toolTipText: "Downloads keep running after this window closes"
                 onClicked: manageWin.close()
             }
         }
@@ -394,14 +413,16 @@ AppWindow {
                 compact: true
                 text: "Download"
                 iconName: "download"
+                toolTipText: "Download once; works offline afterwards"
                 Accessible.name: "Download " + row.modelData.label
-                onClicked: modelsController.downloadAsset(row.modelData.id)
+                onClicked: manageWin.requestDownload(row.modelData.id)
             }
             AppButton {
                 visible: row.dlState === "idle" && row.modelData.downloaded
                 compact: true
                 kind: "danger"
                 text: "Remove"
+                toolTipText: "Delete from this computer; it downloads again the next time it is needed"
                 Accessible.name: "Remove " + row.modelData.label
                 onClicked: modelsController.removeAsset(row.modelData.id)
             }

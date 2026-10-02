@@ -26,9 +26,10 @@ class TestGetDefaultSettings:
     def test_transliteration_section_keys_used_by_settings_service(self):
         settings = get_default_settings()
         transliteration = settings["transliteration"]
-        assert set(transliteration.keys()) == {
-            "enabled", "source", "target", "input_source", "engine",
-        }
+        assert set(transliteration.keys()) == {"source", "target", "engine"}
+
+    def test_translation_section_has_no_stage_switch(self):
+        assert set(get_default_settings()["translation"].keys()) == {"source_lang", "target_lang"}
 
     def test_output_section_keys_used_by_settings_service(self):
         settings = get_default_settings()

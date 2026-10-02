@@ -6,6 +6,7 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from ccgen.config.defaults import (
     ComputeDefaults,
+    DubbingDefaults,
     LanguageOptions,
     ModelDefaults,
     OutputDefaults,
@@ -100,6 +101,11 @@ class PrefsController(QObject):
         return _items(LanguageOptions.TRANSLATION_TARGETS)
 
     @Property(list, constant=True)
+    def sourceOptions(self) -> list:
+        """Languages subtitles can be translated from; "auto" uses each file's known language."""
+        return _items([("Detect from each file", "auto")] + LanguageOptions.TRANSLATION_TARGETS)
+
+    @Property(list, constant=True)
     def translitSchemeOptions(self) -> list:
         """Transliteration scripts."""
         return _items(TransliterationDefaults.SCHEMES)
@@ -110,9 +116,34 @@ class PrefsController(QObject):
         return _items(TransliterationDefaults.ENGINES)
 
     @Property(list, constant=True)
-    def translitInputOptions(self) -> list:
-        """Which text transliteration starts from."""
-        return _items([("Transcription", "transcription"), ("Translation", "translation")])
+    def dubModeOptions(self) -> list:
+        """Dubbing modes with the trade-offs of each, voice cloning first."""
+        return [{"label": label, "code": code, "hint": hint} for label, code, hint in DubbingDefaults.MODES]
+
+    @Property(list, constant=True)
+    def dubLanguageOptions(self) -> list:
+        """Languages a dub can speak; "auto" uses the subtitle's language."""
+        return _items([("Same as the subtitles", DubbingDefaults.LANGUAGE_AUTO)] + DubbingDefaults.LANGUAGES)
+
+    @Property(list, constant=True)
+    def speakerOptions(self) -> list:
+        """How voice cloning treats several speakers."""
+        return _items(DubbingDefaults.SPEAKERS)
+
+    @Property(list, constant=True)
+    def dubOutputOptions(self) -> list:
+        """Where the dub goes: a new track in a copy of the media, or a separate WAV file."""
+        return _items(DubbingDefaults.OUTPUTS)
+
+    @Property(list, constant=True)
+    def dubDeviceOptions(self) -> list:
+        """Devices speech synthesis may use."""
+        return _items(DubbingDefaults.DEVICES)
+
+    @Property(list, constant=True)
+    def speedupRange(self) -> list:
+        """Allowed [min, max] speech speed-up for fitting a line into its time."""
+        return list(DubbingDefaults.MAX_SPEEDUP_RANGE)
 
     @Property(list, constant=True)
     def logLevelOptions(self) -> list:

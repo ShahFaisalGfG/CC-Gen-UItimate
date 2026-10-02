@@ -25,6 +25,7 @@ AppWindow {
         { name: "Transcription", icon: "mic" },
         { name: "Translation", icon: "globe" },
         { name: "Transliteration", icon: "characters" },
+        { name: "Dubbing", icon: "speaker" },
         { name: "Subtitles", icon: "captions" },
         { name: "Advanced", icon: "info" }
     ]
@@ -80,13 +81,17 @@ AppWindow {
         languageCombo.selectCode(saved("transcription.language", "") || "")
         deviceCombo.selectCode(saved("model.device", "auto"))
         vadSwitch.checked = saved("transcription.vad_filter", true)
-        translateSwitch.checked = saved("translation.enabled", false)
+        sourceCombo.selectCode(saved("translation.source_lang", "auto"))
         targetCombo.selectCode(saved("translation.target_lang", "en"))
-        translitSwitch.checked = saved("transliteration.enabled", false)
         translitSourceCombo.selectCode(saved("transliteration.source", "roman"))
         translitTargetCombo.selectCode(saved("transliteration.target", "ur"))
-        translitInputCombo.selectCode(saved("transliteration.input_source", "transcription"))
         translitEngineCombo.selectCode(saved("transliteration.engine", "rule"))
+        dubModeCombo.selectCode(saved("dubbing.mode", "xtts"))
+        speakersCombo.selectCode(saved("dubbing.speakers", "auto"))
+        speedupSpin.value = Math.round(saved("dubbing.max_speedup", 1.35) * 100)
+        dubOutputCombo.selectCode(saved("dubbing.output", "track"))
+        defaultTrackSwitch.checked = saved("dubbing.default_track", false)
+        dubDeviceCombo.selectCode(saved("dubbing.device", "auto"))
         lineLengthSpin.value = saved("output.max_line_length", 42)
         maxLinesSpin.value = saved("output.max_lines", 2)
         outputDirText.text = saved("output.directory", "") || ""
@@ -112,7 +117,7 @@ AppWindow {
         var anyFormat = ["srt", "vtt", "ass", "sbv", "lrc"].some(f => prefsWin.value("output." + f, false))
         if (!anyFormat) {
             saveError.text = "Select at least one default subtitle format."
-            nav.currentIndex = 4
+            nav.currentIndex = prefsWin.sections.findIndex(section => section.name === "Subtitles")
             return
         }
         if (!prefsWin.dirty) { prefsWin.close(); return }
@@ -249,7 +254,7 @@ AppWindow {
                     Card {
                         Layout.fillWidth: true
                         title: "Default transcription settings"
-                        description: "Used for every new run; you can still change them on the main window."
+                        description: "Used by the Generate tab and new workflow steps; you can still change them there."
                         FormRow {
                             label: "Model"
                             StyledComboBox {
@@ -307,21 +312,26 @@ AppWindow {
                     Card {
                         Layout.fillWidth: true
                         title: "Default translation"
-                        description: "Language packages download automatically the first time a pair is used."
-                        trailing: AppSwitch {
-                            id: translateSwitch
-                            onToggled: prefsWin.set("translation.enabled", checked)
-                            accessibleName: "Translate by default"
-                            toolTipText: "Turn translation on for every new run."
+                        description: "Used by the Translate tab and new workflow steps. Language packages download the first time a pair is used."
+                        FormRow {
+                            label: "Translate from"
+                            hint: "Detect reads the language from names like movie_en.srt, or from the tab a file came from."
+                            StyledComboBox {
+                                id: sourceCombo
+                                Layout.fillWidth: true
+                                accessibleName: "Default source language"
+                                toolTipText: "Language the subtitles are written in."
+                                model: prefsController.sourceOptions
+                                onActivated: prefsWin.set("translation.source_lang", currentValue)
+                            }
                         }
                         FormRow {
                             label: "Translate to"
-                            enabled: translateSwitch.checked
                             StyledComboBox {
                                 id: targetCombo
                                 Layout.fillWidth: true
                                 accessibleName: "Default translation language"
-                                toolTipText: "Target language selected when translation is turned on."
+                                toolTipText: "Language subtitles are translated into."
                                 model: prefsController.targetOptions
                                 onActivated: prefsWin.set("translation.target_lang", currentValue)
                             }
@@ -334,59 +344,125 @@ AppWindow {
                     Card {
                         Layout.fillWidth: true
                         title: "Default transliteration"
-                        trailing: AppSwitch {
-                            id: translitSwitch
-                            onToggled: prefsWin.set("transliteration.enabled", checked)
-                            accessibleName: "Transliterate by default"
-                            toolTipText: "Turn transliteration on for every new run."
-                        }
+                        description: "Used by the Transliterate tab and new workflow steps."
                         FormRow {
                             label: "From"
-                            enabled: translitSwitch.checked
                             StyledComboBox {
                                 id: translitSourceCombo
                                 Layout.fillWidth: true
                                 accessibleName: "Default source script"
-                                toolTipText: "Source script selected when transliteration is turned on."
+                                toolTipText: "Script the subtitles are written in."
                                 model: prefsController.translitSchemeOptions
                                 onActivated: prefsWin.set("transliteration.source", currentValue)
                             }
                         }
                         FormRow {
                             label: "To"
-                            enabled: translitSwitch.checked
                             StyledComboBox {
                                 id: translitTargetCombo
                                 Layout.fillWidth: true
                                 accessibleName: "Default target script"
-                                toolTipText: "Target script selected when transliteration is turned on."
+                                toolTipText: "Script to rewrite the subtitles in."
                                 model: prefsController.translitSchemeOptions
                                 onActivated: prefsWin.set("transliteration.target", currentValue)
                             }
                         }
                         FormRow {
-                            label: "Convert from"
-                            enabled: translitSwitch.checked
-                            StyledComboBox {
-                                id: translitInputCombo
-                                Layout.fillWidth: true
-                                accessibleName: "Default text to transliterate"
-                                toolTipText: "Whether transliteration uses the transcript or the translation by default."
-                                model: prefsController.translitInputOptions
-                                onActivated: prefsWin.set("transliteration.input_source", currentValue)
-                            }
-                        }
-                        FormRow {
                             label: "Engine"
                             hint: "Neural gives more natural results but downloads a larger model on first use."
-                            enabled: translitSwitch.checked
                             StyledComboBox {
                                 id: translitEngineCombo
                                 Layout.fillWidth: true
                                 accessibleName: "Default transliteration engine"
-                                toolTipText: "Engine selected when transliteration is turned on."
+                                toolTipText: "Rule-based is instant; neural is more natural but downloads a model."
                                 model: prefsController.translitEngineOptions
                                 onActivated: prefsWin.set("transliteration.engine", currentValue)
+                            }
+                        }
+                    }
+                }
+
+                // Dubbing
+                Page {
+                    Card {
+                        Layout.fillWidth: true
+                        title: "Default dubbing"
+                        description: "Used by the Dub tab and new workflow steps."
+                        FormRow {
+                            label: "Voices"
+                            hint: dubModeCombo.currentIndex >= 0 ? prefsController.dubModeOptions[dubModeCombo.currentIndex].hint : ""
+                            StyledComboBox {
+                                id: dubModeCombo
+                                Layout.fillWidth: true
+                                accessibleName: "Default dubbing voices"
+                                toolTipText: "Clone each original speaker, or use natural or light stock voices."
+                                model: prefsController.dubModeOptions
+                                onActivated: prefsWin.set("dubbing.mode", currentValue)
+                            }
+                        }
+                        FormRow {
+                            label: "Speakers"
+                            hint: "For voice cloning: give each detected speaker their own voice, or use one voice for everyone."
+                            StyledComboBox {
+                                id: speakersCombo
+                                Layout.fillWidth: true
+                                accessibleName: "Speakers"
+                                toolTipText: "How voice cloning treats several people talking."
+                                model: prefsController.speakerOptions
+                                onActivated: prefsWin.set("dubbing.speakers", currentValue)
+                            }
+                        }
+                        FormRow {
+                            label: "Fastest speech"
+                            hint: "Lines that don't fit their time are spoken faster up to this speed, then cut short."
+                            SpinBox {
+                                id: speedupSpin
+                                from: Math.round(prefsController.speedupRange[0] * 100)
+                                to: Math.round(prefsController.speedupRange[1] * 100)
+                                stepSize: 5
+                                editable: true
+                                textFromValue: (value, locale) => (value / 100).toFixed(2) + "x"
+                                valueFromText: (text, locale) => Math.round(parseFloat(text) * 100)
+                                onValueModified: prefsWin.set("dubbing.max_speedup", value / 100)
+                                Accessible.name: "Fastest speech"
+                                ToolTip.visible: hovered
+                                ToolTip.text: "1.00x never speeds speech up; 1.35x is barely noticeable."
+                                ToolTip.delay: 600
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                        FormRow {
+                            label: "Save the dub as"
+                            StyledComboBox {
+                                id: dubOutputCombo
+                                Layout.fillWidth: true
+                                accessibleName: "Save the dub as"
+                                toolTipText: "A new audio track in a copy of the video (.mkv), or a separate WAV file."
+                                model: prefsController.dubOutputOptions
+                                onActivated: prefsWin.set("dubbing.output", currentValue)
+                            }
+                        }
+                        FormRow {
+                            label: "Play the dub by default"
+                            hint: "Players start with the dubbed track; the original stays selectable."
+                            AppSwitch {
+                                id: defaultTrackSwitch
+                                onToggled: prefsWin.set("dubbing.default_track", checked)
+                                accessibleName: "Play the dub by default"
+                                toolTipText: "Mark the dubbed track as the default audio track."
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                        FormRow {
+                            label: "Run on"
+                            hint: "Automatic times Kokoro and Piper voices on each supported GPU (NVIDIA, AMD, Intel, or Apple) and the CPU and keeps the fastest until the app closes. Voice cloning uses the first GPU that works, or the CPU."
+                            StyledComboBox {
+                                id: dubDeviceCombo
+                                Layout.fillWidth: true
+                                accessibleName: "Dubbing device"
+                                toolTipText: "Where speech is generated."
+                                model: prefsController.dubDeviceOptions
+                                onActivated: prefsWin.set("dubbing.device", currentValue)
                             }
                         }
                     }

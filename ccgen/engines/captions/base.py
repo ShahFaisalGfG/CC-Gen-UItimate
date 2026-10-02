@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
+import numpy as np
+
 from ccgen.core import Segment
 
 
@@ -20,7 +22,7 @@ class CaptionEngine(ABC):
     @abstractmethod
     def transcribe(
         self,
-        audio_path: str,
+        audio: str | np.ndarray,
         language: Optional[str],
         beam_size: int,
         vad_filter: bool,
@@ -28,4 +30,4 @@ class CaptionEngine(ABC):
         segment_cb: Optional[Callable[[Segment], None]] = None,
         progress_num_cb: Optional[Callable[[int, int], None]] = None,
     ) -> list[Segment]:
-        """Transcribe an audio file and return word-timestamped segments."""
+        """Transcribe a media file path or 16 kHz mono float32 samples into word-timestamped segments."""

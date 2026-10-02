@@ -22,6 +22,8 @@ Rectangle {
     required property string status
     required property real progress
     required property string message
+    // The subtitle a Dub tab row speaks ("" elsewhere).
+    required property string companion
     property bool current: false
     property bool listHasFocus: false
 
@@ -53,6 +55,7 @@ Rectangle {
     Accessible.role: Accessible.ListItem
     Accessible.name: fileItem.name + ", " + fileItem._statusText
         + (fileItem.message ? ", " + fileItem.message : "")
+        + (fileItem.companion ? ", speaks " + fileItem.companion : "")
     Accessible.description: fileItem.size + ", " + fileItem.folder
     Accessible.selectable: true
     Accessible.selected: fileItem.selected
@@ -123,6 +126,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: fileItem.status === "error" && fileItem.message ? fileItem.message
                     : fileItem.status === "done" && fileItem.message ? fileItem.size + "  ·  " + fileItem.message
+                    : fileItem.companion ? "Speaks " + fileItem.companion.replace(/^.*[\\/]/, "")
                     : fileItem.size + "  ·  " + fileItem.folder
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontCaption

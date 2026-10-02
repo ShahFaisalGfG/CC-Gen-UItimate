@@ -11,13 +11,16 @@
     "vad_filter": true
   },
   "translation": {
-    "enabled": false,
     "source_lang": "auto",
     "target_lang": "en"
   },
   "output": {
+    "directory": "",
     "srt": true,
     "vtt": false,
+    "lrc": false,
+    "ass": false,
+    "sbv": false,
     "max_line_length": 42,
     "max_lines": 2
   },
@@ -26,11 +29,18 @@
     "log_level": "critical"
   },
   "transliteration": {
-    "enabled": false,
     "source": "roman",
     "target": "ur",
-    "input_source": "transcription",
     "engine": "rule"
+  },
+  "dubbing": {
+    "mode": "xtts",
+    "speakers": "auto",
+    "max_speedup": 1.35,
+    "output": "track",
+    "default_track": false,
+    "device": "auto",
+    "xtts_terms_accepted": false
   },
   "ui": {
     "theme": "system"

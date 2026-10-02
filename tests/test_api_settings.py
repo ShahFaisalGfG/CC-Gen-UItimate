@@ -42,10 +42,6 @@ class TestPutSettings:
         client.put("/settings", json={"key": "ui.theme", "value": "dark"})
         assert client.get("/settings").json()["ui"]["theme"] == "dark"
 
-    def test_missing_parent_keys_are_created(self, client):
-        resp = client.put("/settings", json={"key": "custom_section.flag", "value": True})
-        assert resp.json()["custom_section"]["flag"] is True
-
     def test_other_defaults_untouched(self, client):
         client.put("/settings", json={"key": "model.name", "value": "small"})
         data = client.get("/settings").json()
@@ -79,7 +75,21 @@ class TestPatchSettings:
         assert configure.call_args.args[0]["logging"]["log_level"] == "all"
 
     def test_concurrent_updates_are_not_lost(self, client):
-        keys = [f"custom.k{i}" for i in range(12)]
+        values = {
+            "output.srt": False, "output.vtt": True, "output.lrc": True, "output.ass": True,
+            "output.sbv": True, "output.max_lines": 3, "output.directory": "D:/subs",
+            "transcription.vad_filter": False, "ui.theme": "dark", "model.name": "small",
+            "translation.target_lang": "ur", "transliteration.engine": "neural",
+        }
         with ThreadPoolExecutor(max_workers=6) as pool:
-            list(pool.map(lambda k: client.put("/settings", json={"key": k, "value": 1}), keys))
-        assert set(client.get("/settings").json()["custom"]) == {k.split(".")[1] for k in keys}
+            list(pool.map(lambda item: client.put("/settings", json={"key": item[0], "value": item[1]}), values.items()))
+        data = client.get("/settings").json()
+        for key, value in values.items():
+            section, name = key.split(".")
+            assert data[section][name] == value, key
+
+    def test_unknown_key_is_rejected(self, client):
+        resp = client.patch("/settings", json={"values": {"custom.k": 1}})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Unknown setting: custom.k"
+        assert client.put("/settings", json={"key": "model", "value": 1}).status_code == 400

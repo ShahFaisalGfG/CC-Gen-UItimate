@@ -2,8 +2,11 @@
 # faster-whisper, argostranslate) to a single per-thread callback so the UI can show a real
 # download percentage instead of a generic "downloading..." spinner.
 
+import hashlib
 import importlib
 import logging
+import os
+import tempfile
 import threading
 import time
 import urllib.request
@@ -31,6 +34,7 @@ _HF_DOWNLOAD_CHUNK_SIZE = 1 * 1024 * 1024
 # handful of times per download and any throttle here silently dropped nearly all of them.
 _REPORT_INTERVAL_S = 0.2
 _CHUNK_SIZE = 65536
+_FILE_CHUNK_SIZE = 1024 * 1024
 _HF_RETRY_COUNT = 3
 _HF_RETRY_BACKOFF_S = 1.0
 
@@ -125,6 +129,36 @@ def _maybe_cancel(cancel_check: Optional[Callable[[], bool]]) -> None:
     """Raise DownloadCancelled when the caller's cancel flag has been set."""
     if cancel_check is not None and cancel_check():
         raise DownloadCancelled("Download cancelled")
+
+
+def download_file(url: str, destination: str, size: int, sha256: str) -> None:
+    """Stream `url` into `destination`, verifying its size and SHA-256 before publishing it.
+
+    Reports bytes to the callback of the enclosing download_progress() block and stops at the
+    next chunk once the enclosing cancellable() flag is set. The file appears at `destination`
+    only after it verified, so an interrupted download never looks complete.
+    """
+    directory = os.path.dirname(destination)
+    os.makedirs(directory, exist_ok=True)
+    fd, pending = tempfile.mkstemp(prefix=".download-", dir=directory)
+    try:
+        digest = hashlib.sha256()
+        done = 0
+        request = urllib.request.Request(url, headers={"User-Agent": "CC-Gen-Ultimate"})
+        with os.fdopen(fd, "wb") as output, urllib.request.urlopen(request, timeout=60) as response:
+            total = int(response.headers.get("Content-Length") or size)
+            while chunk := response.read(_FILE_CHUNK_SIZE):
+                output.write(chunk)
+                digest.update(chunk)
+                done += len(chunk)
+                _report_bytes(done, total)
+                _maybe_cancel(getattr(_state, "cancel_check", None))
+        if done != size or digest.hexdigest() != sha256:
+            raise RuntimeError(f"Downloaded {os.path.basename(destination)} is damaged; please try again.")
+        os.replace(pending, destination)
+    finally:
+        if os.path.exists(pending):
+            os.unlink(pending)
 
 
 def _streaming_get(url: str, retry_count: int = 3) -> Optional[bytes]:

@@ -30,8 +30,11 @@ GridLayout {
         Layout.topMargin: row.stacked ? 0 : 8
         spacing: 2
 
+        // Wrapped text must not size the column by its unwrapped length: a long hint would
+        // otherwise push the grid's width around and lay the row out again without end.
         Text {
             Layout.fillWidth: true
+            Layout.preferredWidth: 1
             text: row.label
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontBody
@@ -41,6 +44,7 @@ GridLayout {
         }
         Text {
             Layout.fillWidth: true
+            Layout.preferredWidth: 1
             visible: row.hint.length > 0
             text: row.hint
             font.family: Theme.fontFamily

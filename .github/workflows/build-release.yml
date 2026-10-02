@@ -21,8 +21,14 @@ permissions:
   contents: write
 
 jobs:
+  # One build per GPU vendor: an installer can carry only one PyTorch build (see scripts/bundle.ps1).
+  # "cuda" is the main release (NVIDIA); "xpu" is the Intel GPU edition, named with "_intel_gpu".
   build:
     runs-on: windows-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        gpu: [cuda, xpu]
 
     steps:
       - name: Checkout
@@ -43,16 +49,35 @@ jobs:
         run: |
           $json = python scripts/read_meta.py
           $m    = $json | ConvertFrom-Json
-          "VER=$($m.Version)"         | Out-File $env:GITHUB_OUTPUT -Append
-          "APP_NAME=$($m.AppName)"    | Out-File $env:GITHUB_OUTPUT -Append
-          "PUBLISHER=$($m.Publisher)" | Out-File $env:GITHUB_OUTPUT -Append
-          "URL=$($m.Url)"             | Out-File $env:GITHUB_OUTPUT -Append
-          "EXE_NAME=$($m.ExeName)"    | Out-File $env:GITHUB_OUTPUT -Append
+          . .\scripts\bundle.ps1
+          "VER=$($m.Version)"                   | Out-File $env:GITHUB_OUTPUT -Append
+          "APP_NAME=$($m.AppName)"              | Out-File $env:GITHUB_OUTPUT -Append
+          "PUBLISHER=$($m.Publisher)"           | Out-File $env:GITHUB_OUTPUT -Append
+          "URL=$($m.Url)"                       | Out-File $env:GITHUB_OUTPUT -Append
+          "EXE_NAME=$($m.ExeName)"              | Out-File $env:GITHUB_OUTPUT -Append
+          "SUFFIX=$($GpuSuffix['${{ matrix.gpu }}'])" | Out-File $env:GITHUB_OUTPUT -Append
 
+      # PyInstaller is a dev-only dependency (pyproject's [dev] extra), so it is installed here.
+      # Install-GpuRuntime then swaps in this build's PyTorch and the DirectML ONNX Runtime.
       - name: Install Python dependencies
         shell: pwsh
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt "pyinstaller>=6.17"
+          if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
+          . .\scripts\bundle.ps1
+          Install-GpuRuntime -Gpu ${{ matrix.gpu }}
 
+      # Tests mock every model download, so they run offline. Both builds share the same code,
+      # so the checks run once.
+      - name: Run tests
+        if: matrix.gpu == 'cuda'
+        shell: pwsh
+        run: python -m pytest tests -q
+
+      - name: Type-check
+        if: matrix.gpu == 'cuda'
+        shell: pwsh
+        run: pyright ccgen/ app.py main.py server.py
       # Compiles ccgen_shell.dll using MSVC + CMake. No vcpkg/third-party
       # dependencies - it's pure Win32/COM, so no dependency cache is needed.
       - name: Build native shell extension
@@ -63,22 +88,26 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType Directory -Path build\installer -Force | Out-Null
 
-      # Bundles the Python app into dist\CC-Gen-Ultimate\ (onedir - used by both installers)
+      # Bundles the Python app into dist\CC-Gen-Ultimate\ (onedir - used by both installers).
+      # scripts/bundle.ps1 holds the PyInstaller arguments shared with the local build scripts.
       - name: Build PyInstaller bundle
         shell: pwsh
         run: |
-          $appName = "${{ steps.meta.outputs.APP_NAME }}"
-          pyinstaller `
-            --name $appName --windowed --onedir `
-            --icon           "ccgen\assets\icons\CCGenUltimate.ico" `
-            --add-data       "ccgen\qml;ccgen\qml" `
-            --add-data       "ccgen\assets;ccgen\assets" `
-            --collect-data   "indic_transliteration" `
-            --collect-data   "faster_whisper" `
-            --distpath dist  --workpath build\pyinstaller --specpath . `
-            --noconfirm --clean `
-            app.py
+          . .\scripts\bundle.ps1
+          $pyArgs = Get-PyInstallerArgs -Name "${{ steps.meta.outputs.APP_NAME }}" -Mode onedir -DistPath "dist"
+          pyinstaller @pyArgs
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed (exit $LASTEXITCODE)" }
 
+      # Runs the frozen exe with --self-test: imports every engine and lazily loaded module, loads
+      # the native libraries, decodes audio, loads the speech engines' eSpeak and dictionary data,
+      # starts the API server, and compiles all QML. A module, DLL, or data file missing from the
+      # bundle fails the release here instead of on a user's PC.
+      - name: Verify PyInstaller bundle
+        shell: pwsh
+        run: |
+          . .\scripts\bundle.ps1
+          $appName = "${{ steps.meta.outputs.APP_NAME }}"
+          if (-not (Test-Bundle "dist\$appName\$appName.exe")) { throw "Bundle self-test failed" }
       - name: Copy shell DLL into bundle
         shell: pwsh
         run: Copy-Item build\shell\ccgen_shell.dll dist\${{ steps.meta.outputs.APP_NAME }}\ -Force
@@ -88,79 +117,78 @@ jobs:
         run: choco install innosetup --yes --no-progress
 
       # /D flags override the #ifndef defaults in the ISS files
-      - name: Build system installer
+      - name: Build installers
         shell: pwsh
         run: |
-          $ver       = "${{ steps.meta.outputs.VER }}"
-          $appName   = "${{ steps.meta.outputs.APP_NAME }}"
-          $publisher = "${{ steps.meta.outputs.PUBLISHER }}"
-          $url       = "${{ steps.meta.outputs.URL }}"
-          $iscc      = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc `
-            "/DMyAppName=$appName" `
-            "/DMyAppVersion=$ver" `
-            "/DMyAppPublisher=$publisher" `
-            "/DMyAppURL=$url" `
-            installer\ccgenultimate_system_installer.iss
-          if ($LASTEXITCODE -ne 0) { throw "System installer build failed (exit $LASTEXITCODE)" }
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          foreach ($iss in "installer\ccgenultimate_system_installer.iss", "installer\ccgenultimate_user_installer.iss") {
+            & $iscc `
+              "/DMyAppName=${{ steps.meta.outputs.APP_NAME }}" `
+              "/DMyAppVersion=${{ steps.meta.outputs.VER }}" `
+              "/DMyAppPublisher=${{ steps.meta.outputs.PUBLISHER }}" `
+              "/DMyAppURL=${{ steps.meta.outputs.URL }}" `
+              "/DMyGpuSuffix=${{ steps.meta.outputs.SUFFIX }}" `
+              $iss
+            if ($LASTEXITCODE -ne 0) { throw "Installer build failed for $iss (exit $LASTEXITCODE)" }
+          }
 
-      - name: Build user installer
-        shell: pwsh
-        run: |
-          $ver       = "${{ steps.meta.outputs.VER }}"
-          $appName   = "${{ steps.meta.outputs.APP_NAME }}"
-          $publisher = "${{ steps.meta.outputs.PUBLISHER }}"
-          $url       = "${{ steps.meta.outputs.URL }}"
-          $iscc      = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc `
-            "/DMyAppName=$appName" `
-            "/DMyAppVersion=$ver" `
-            "/DMyAppPublisher=$publisher" `
-            "/DMyAppURL=$url" `
-            installer\ccgenultimate_user_installer.iss
-          if ($LASTEXITCODE -ne 0) { throw "User installer build failed (exit $LASTEXITCODE)" }
-
-      # Single-file portable exe
+      # Single-file portable exe, verified the same way as the onedir bundle
       - name: Build portable exe
         shell: pwsh
         run: |
-          $ver     = "${{ steps.meta.outputs.VER }}"
-          $appName = "${{ steps.meta.outputs.APP_NAME }}"
-          pyinstaller `
-            --name "${appName}_${ver}_portable" --windowed --onefile `
-            --icon           "ccgen\assets\icons\CCGenUltimate.ico" `
-            --add-data       "ccgen\qml;ccgen\qml" `
-            --add-data       "ccgen\assets;ccgen\assets" `
-            --collect-data   "indic_transliteration" `
-            --collect-data   "faster_whisper" `
-            --distpath build --workpath build\pyinstaller --specpath . `
-            --noconfirm --clean `
-            app.py
-
+          . .\scripts\bundle.ps1
+          $portable = "${{ steps.meta.outputs.APP_NAME }}_${{ steps.meta.outputs.VER }}${{ steps.meta.outputs.SUFFIX }}_portable"
+          $pyArgs = Get-PyInstallerArgs -Name $portable -Mode onefile -DistPath "build"
+          pyinstaller @pyArgs
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller (portable) failed (exit $LASTEXITCODE)" }
+          if (-not (Test-Bundle "build\$portable.exe")) { throw "Portable self-test failed" }
       # Pack all three EXEs into .7z archives for users who prefer compressed downloads.
       - name: Create 7z archives
         shell: pwsh
         run: |
-          $ver     = "${{ steps.meta.outputs.VER }}"
-          $appName = "${{ steps.meta.outputs.APP_NAME }}"
-          $7z      = "C:\Program Files\7-Zip\7z.exe"
+          $base = "${{ steps.meta.outputs.APP_NAME }}_${{ steps.meta.outputs.VER }}${{ steps.meta.outputs.SUFFIX }}"
+          $7z   = "C:\Program Files\7-Zip\7z.exe"
+          New-Item -ItemType Directory -Path release -Force | Out-Null
 
-          & $7z a -t7z -mx=9 `
-            "build\installer\${appName}_${ver}_system_installer.7z" `
-            "build\installer\${appName}_${ver}_system_installer.exe"
-          if ($LASTEXITCODE -ne 0) { throw "7z: system installer archive failed" }
+          foreach ($kind in "system", "user") {
+            & $7z a -t7z -mx=9 "release\${base}_${kind}_installer.7z" "build\installer\${base}_${kind}_installer.exe"
+            if ($LASTEXITCODE -ne 0) { throw "7z: $kind installer archive failed" }
+            Copy-Item "build\installer\${base}_${kind}_installer.exe" release\
+          }
 
-          & $7z a -t7z -mx=9 `
-            "build\installer\${appName}_${ver}_user_installer.7z" `
-            "build\installer\${appName}_${ver}_user_installer.exe"
-          if ($LASTEXITCODE -ne 0) { throw "7z: user installer archive failed" }
-
-          & $7z a -t7z -mx=9 `
-            "build\${appName}_${ver}_portable.7z" `
-            "dist\${appName}\*"
+          & $7z a -t7z -mx=9 "release\${base}_portable.7z" "dist\${{ steps.meta.outputs.APP_NAME }}\*"
           if ($LASTEXITCODE -ne 0) { throw "7z: portable bundle archive failed" }
+          Copy-Item "build\${base}_portable.exe" release\
 
-      # Creates + publishes the GitHub Release, uploads all six assets.
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.gpu }}
+          path: release\*
+          if-no-files-found: error
+
+  # Publishes one GitHub Release with both builds' files once every build has passed.
+  release:
+    needs: build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
       # Must use RELEASE_PAT (not GITHUB_TOKEN) - events fired by GITHUB_TOKEN
       # do not cascade into other workflows, so winget-release.yml would never trigger.
       - name: Create GitHub Release
@@ -168,15 +196,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
-          $ver     = "${{ steps.meta.outputs.VER }}"
-          $appName = "${{ steps.meta.outputs.APP_NAME }}"
+          $json    = python scripts/read_meta.py
+          $m       = $json | ConvertFrom-Json
           $tag     = "${{ github.event.inputs.tag }}"
+          $files   = Get-ChildItem release -File | ForEach-Object { $_.FullName }
           gh release create $tag `
-            --title "$appName v$ver" `
-            --notes-file "release_notes/release_notes_v${ver}.md" `
-            "build\installer\${appName}_${ver}_system_installer.exe" `
-            "build\installer\${appName}_${ver}_system_installer.7z" `
-            "build\installer\${appName}_${ver}_user_installer.exe" `
-            "build\installer\${appName}_${ver}_user_installer.7z" `
-            "build\${appName}_${ver}_portable.exe" `
-            "build\${appName}_${ver}_portable.7z"
+            --title "$($m.AppName) v$($m.Version)" `
+            --notes-file "release_notes/release_notes_v$($m.Version).md" `
+            @files

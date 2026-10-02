@@ -106,6 +106,11 @@ class AppController(QObject):
         """Convert a file:// URL from a QML dialog into a local Windows path."""
         return to_local_path(url)
 
+    @Slot(str, result=str)
+    def folderUrl(self, path: str) -> str:
+        """The file:// URL of the folder holding `path`, for starting a QML dialog there."""
+        return QUrl.fromLocalFile(os.path.dirname(path)).toString() if path else ""
+
     @Slot()
     def openLogsFolder(self) -> None:
         """Open the folder holding the application log files."""

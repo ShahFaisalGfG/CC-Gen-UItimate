@@ -1,8 +1,9 @@
 # file_model.py - QAbstractListModel backing the QML file queue
 #
-# Built to stay responsive with thousands of rows: duplicate checks use a path-key set,
-# additions arrive as one batched insert, bulk removals rebuild the list in a single pass,
-# and selection lives on each row so removing rows never has to renumber a selection set.
+# Built to stay responsive with thousands of rows: duplicate checks and row lookups use a
+# path-key index, additions arrive as one batched insert, bulk removals rebuild the list in a
+# single pass, and selection lives on each row so removing rows never has to renumber a
+# selection set.
 
 import os
 from typing import Any, Optional
@@ -17,6 +18,7 @@ from PySide6.QtCore import (
     Slot,
 )
 
+from ccgen.config.capabilities import language_from_filename
 from ccgen.utils.helpers import format_bytes
 
 _UserRole = Qt.ItemDataRole.UserRole
@@ -47,16 +49,21 @@ class MediaFileModel(QAbstractListModel):
     MessageRole   = _UserRole + 9
     FolderRole    = _UserRole + 10
     OutputsRole   = _UserRole + 11
+    LanguageRole  = _UserRole + 12
+    CompanionRole = _UserRole + 13
 
     countChanged      = Signal(int)
     totalSizeChanged  = Signal()
     selectionChanged  = Signal()
     statusCountsChanged = Signal()
+    # A row's language or paired subtitle changed, which can change whether it can run.
+    inputsChanged     = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._files: list[dict[str, Any]] = []
-        self._keys: set[str] = set()
+        # Path key -> row, kept in step with _files so lookups by path never scan the list.
+        self._rows: dict[str, int] = {}
         self._total_bytes: int = 0
         self._selected_count = 0
 
@@ -81,6 +88,8 @@ class MediaFileModel(QAbstractListModel):
             case self.MessageRole:  return item["message"]
             case self.FolderRole:   return item["folder"]
             case self.OutputsRole:  return item["outputs"]
+            case self.LanguageRole: return item["language"]
+            case self.CompanionRole: return item["companion"]
         if role == Qt.ItemDataRole.DisplayRole:
             return item["name"]
         return None
@@ -98,6 +107,8 @@ class MediaFileModel(QAbstractListModel):
             self.MessageRole:  b"message",
             self.FolderRole:   b"folder",
             self.OutputsRole:  b"outputs",
+            self.LanguageRole: b"language",
+            self.CompanionRole: b"companion",
         }
 
     # ── Adding rows ──────────────────────────────────────────────────────────
@@ -110,7 +121,7 @@ class MediaFileModel(QAbstractListModel):
         for path in paths:
             norm = os.path.normpath(str(path))
             key = os.path.normcase(norm)
-            if key in self._keys or key in seen or not os.path.isfile(norm):
+            if key in self._rows or key in seen or not os.path.isfile(norm):
                 continue
             try:
                 size = os.path.getsize(norm)
@@ -127,7 +138,7 @@ class MediaFileModel(QAbstractListModel):
         for path, size in entries:
             norm = os.path.normpath(path)
             key = os.path.normcase(norm)
-            if key in self._keys or key in seen:
+            if key in self._rows or key in seen:
                 continue
             seen.add(key)
             items.append(self._make_item(norm, int(size)))
@@ -142,6 +153,7 @@ class MediaFileModel(QAbstractListModel):
         if 0 <= row < len(self._files) and self._files[row]["status"] != STATUS_PROCESSING:
             self.beginRemoveRows(QModelIndex(), row, row)
             self._forget(self._files.pop(row))
+            self._reindex()
             self.endRemoveRows()
             self._emit_all_changed()
 
@@ -223,6 +235,33 @@ class MediaFileModel(QAbstractListModel):
             fields["outputs"] = outputs
         self._update(row, **fields)
 
+    @Slot(int, str)
+    def setCompanion(self, row: int, path: str) -> None:
+        """Pair a media row with the subtitle file it speaks ("" clears the pairing)."""
+        if 0 <= row < len(self._files):
+            companion = os.path.normpath(path) if path else ""
+            # The row speaks the new subtitle, so its language comes from that file's name.
+            self._update(row, companion=companion, language=language_from_filename(companion) if companion else "")
+
+    def set_companion(self, path: str, companion: str, language: str = "") -> None:
+        """Pair the row for `path` with a subtitle file, optionally recording its language."""
+        row = self._row_of(path)
+        if row >= 0:
+            self.setCompanion(row, companion)
+            if language:
+                self._update(row, language=language)
+
+    def set_language(self, path: str, language: str) -> None:
+        """Record the language of a file's text (detected, or known from where it came from)."""
+        row = self._row_of(path)
+        if row >= 0 and language:
+            self._update(row, language=language)
+
+    def item(self, path: str) -> Optional[dict[str, Any]]:
+        """A copy of the row for `path`, or None when it is no longer in the queue."""
+        row = self._row_of(path)
+        return dict(self._files[row]) if row >= 0 else None
+
     def runnable_paths(self) -> list[str]:
         """Paths a new run should process: unfinished files, or every file when all are done."""
         unfinished = [f["path"] for f in self._files if f["status"] != STATUS_DONE]
@@ -232,10 +271,6 @@ class MediaFileModel(QAbstractListModel):
         """Mark the given files pending with cleared progress and messages."""
         for path in paths:
             self.set_run_state(path, status=STATUS_PENDING, progress=0.0, message="", outputs=[])
-
-    def contains(self, path: str) -> bool:
-        """Return True while the file is still in the queue."""
-        return self._row_of(path) >= 0
 
     # ── Query API ────────────────────────────────────────────────────────────
 
@@ -274,6 +309,14 @@ class MediaFileModel(QAbstractListModel):
         """Return a list of all file paths in the model."""
         return [f["path"] for f in self._files]
 
+    @Slot(int, result="QVariantMap")
+    def rowAt(self, row: int) -> dict:
+        """The row's path, kind, outputs, and companion, for menus acting on one file."""
+        if not 0 <= row < len(self._files):
+            return {}
+        item = self._files[row]
+        return {key: item[key] for key in ("path", "kind", "status", "outputs", "companion", "language")}
+
     # ── Internal helpers ─────────────────────────────────────────────────────
 
     @staticmethod
@@ -295,6 +338,10 @@ class MediaFileModel(QAbstractListModel):
             "message": "",
             "outputs": [],
             "selected": False,
+            # Language of the file's text: from a `_xx` name suffix, a detection, or a hand-off.
+            "language": language_from_filename(path) if kind == "subtitle" else "",
+            # For dubbing: the subtitle file a media row speaks.
+            "companion": "",
         }
 
     def _insert(self, items: list[dict[str, Any]]) -> None:
@@ -304,8 +351,8 @@ class MediaFileModel(QAbstractListModel):
         first = len(self._files)
         self.beginInsertRows(QModelIndex(), first, first + len(items) - 1)
         self._files.extend(items)
-        for item in items:
-            self._keys.add(os.path.normcase(item["path"]))
+        for row, item in enumerate(items, first):
+            self._rows[os.path.normcase(item["path"])] = row
             self._total_bytes += item["bytes"]
         self.endInsertRows()
         self.countChanged.emit(len(self._files))
@@ -319,15 +366,14 @@ class MediaFileModel(QAbstractListModel):
             return
         self.beginResetModel()
         self._files = keep
-        self._keys = {os.path.normcase(item["path"]) for item in keep}
+        self._reindex()
         self._total_bytes = sum(item["bytes"] for item in keep)
         self._selected_count = sum(1 for item in keep if item["selected"])
         self.endResetModel()
         self._emit_all_changed()
 
     def _forget(self, item: dict[str, Any]) -> None:
-        """Update bookkeeping for one removed row."""
-        self._keys.discard(os.path.normcase(item["path"]))
+        """Update bookkeeping for one removed row (call _reindex() afterwards)."""
         self._total_bytes -= item["bytes"]
         if item["selected"]:
             self._selected_count -= 1
@@ -365,6 +411,7 @@ class MediaFileModel(QAbstractListModel):
         role_for = {
             "status": self.StatusRole, "progress": self.ProgressRole,
             "message": self.MessageRole, "outputs": self.OutputsRole,
+            "language": self.LanguageRole, "companion": self.CompanionRole,
         }
         item = self._files[row]
         roles = [role_for[k] for k, v in fields.items() if item.get(k) != v]
@@ -375,13 +422,13 @@ class MediaFileModel(QAbstractListModel):
         self.dataChanged.emit(idx, idx, roles)
         if "status" in fields:
             self.statusCountsChanged.emit()
+        if self.LanguageRole in roles or self.CompanionRole in roles:
+            self.inputsChanged.emit()
 
     def _row_of(self, path: str) -> int:
         """Return the row of a path, or -1 when it is no longer in the queue."""
-        key = os.path.normcase(os.path.normpath(path))
-        if key not in self._keys:
-            return -1
-        for row, item in enumerate(self._files):
-            if os.path.normcase(item["path"]) == key:
-                return row
-        return -1
+        return self._rows.get(os.path.normcase(os.path.normpath(path)), -1)
+
+    def _reindex(self) -> None:
+        """Rebuild the path-to-row index after rows were removed."""
+        self._rows = {os.path.normcase(item["path"]): row for row, item in enumerate(self._files)}
